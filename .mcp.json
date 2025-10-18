@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "Context7": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"],
+      "env": {}
+    },
+    "Echo": {
+      "type": "stdio",
+      "command": "sh",
+      "args": ["-c", "uv run --with fastmcp fastmcp run fastmcp.json"],
+      "env": {}
+    }
+  }
+}

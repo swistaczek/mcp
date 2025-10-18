@@ -1,0 +1,23 @@
+[env]
+_.python.venv = { path = ".venv", create = true }
+
+[tasks.install]
+description = "Install project dependencies"
+run = "uv pip install fastmcp"
+
+[tasks.run]
+description = "Run an MCP server"
+run = "fastmcp run {{arg(name='server', default='servers/example.py')}}"
+
+[tasks.dev]
+description = "Run server in development mode"
+alias = "d"
+run = "fastmcp run {{arg(name='server', default='servers/example.py')}} --transport stdio"
+
+[tasks.version]
+description = "Show fastmcp version"
+run = "fastmcp version"
+
+[tasks.list]
+description = "List all available MCP servers"
+run = "ls -la servers/"
