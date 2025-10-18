@@ -1,0 +1,48 @@
+{
+  "registered_domains": {
+    "google.com": {
+      "response": "Domain Name: GOOGLE.COM\nRegistry Domain ID: 2138514_DOMAIN_COM-VRSN\nRegistrar WHOIS Server: whois.markmonitor.com\nRegistrar URL: http://www.markmonitor.com\nUpdated Date: 2019-09-09T15:39:04Z\nCreation Date: 1997-09-15T04:00:00Z\nRegistry Expiry Date: 2028-09-14T04:00:00Z\nRegistrar: MarkMonitor Inc.\nRegistrar IANA ID: 292\nRegistrar Abuse Contact Email: abusecomplaints@markmonitor.com\nRegistrar Abuse Contact Phone: +1.2086851750",
+      "registered": true
+    },
+    "example.org": {
+      "response": "Domain Name: EXAMPLE.ORG\nRegistry Domain ID: D1234567-LROR\nRegistrar WHOIS Server: whois.iana.org\nRegistrar URL: http://www.iana.org/domains/example\nUpdated Date: 2024-08-14T07:01:31Z\nCreation Date: 1995-08-14T04:00:00Z\nRegistry Expiry Date: 2025-08-13T04:00:00Z\nRegistrar: RESERVED-Internet Assigned Numbers Authority",
+      "registered": true
+    },
+    "onet.pl": {
+      "response": "DOMAIN NAME:           onet.pl\nregistrant type:       organization\nnamiservers:           ns1.onet.pl. [193.17.41.10]\n                       ns2.onet.pl. [193.17.41.162]\ncreated:               1996.08.19 13:00:00\nlast modified:         2023.08.04 13:22:47\nrenewal date:          2024.08.18 14:00:00\n\nOption created by the Registrar.",
+      "registered": true
+    }
+  },
+  "available_domains": {
+    "thisdomainshouldbeavailable123456.com": {
+      "response": "No match for domain \"THISDOMAINSHOULDBEAVAILABLE123456.COM\".",
+      "registered": false,
+      "pattern": "No match for"
+    },
+    "example-not-registered.org": {
+      "response": "NOT FOUND",
+      "registered": false,
+      "pattern": "NOT FOUND"
+    },
+    "test-available.pl": {
+      "response": "No information available about domain name test-available.pl in the Registry NASK database.",
+      "registered": false,
+      "pattern": "No information available about domain name"
+    },
+    "available.cn": {
+      "response": "No matching record.",
+      "registered": false,
+      "pattern": "No matching record"
+    }
+  },
+  "error_cases": {
+    "unsupported.xyz999": {
+      "error": "Unsupported TLD",
+      "registered": false
+    },
+    "timeout.com": {
+      "error": "WHOIS query timeout",
+      "fallback": "dns"
+    }
+  }
+}
