@@ -1,42 +1,65 @@
 # MCP Servers
 
-Personal MCP servers using mise + Python 3.13 + FastMCP.
+Personal MCP servers collection using mise + Python 3.13 + FastMCP.
+
+## Project Structure
+
+```
+mcp/
+├── domains.py           # Domain registration checker
+├── domains.fastmcp.json # Domain checker config
+├── tests/               # Unit tests
+│   ├── test_domains.py
+│   └── fixtures/
+├── .mcp.json           # Claude Code configuration
+└── pyproject.toml      # Python dependencies
+```
 
 ## Quick Start
 
 ```bash
-# Install
+# Install dependencies
 mise run install
 
-# Run server locally
-fastmcp dev
+# Run tests
+python -m pytest tests/ -v
 
 # Available tasks
 mise tasks
 ```
 
-## Create a Server
+## Available Servers
 
-```python
-from fastmcp import FastMCP
+### Domain Checker
 
-mcp = FastMCP("My Server")
+Check domain registration status via WHOIS with DNS fallback.
 
-@mcp.tool
-def my_tool(param: str) -> str:
-    """Tool description"""
-    return f"Result: {param}"
+**Tool**: `check_domains`
+- Batch check up to 50 domains
+- Real-time progress reporting
+- WHOIS query with DNS fallback
+- Supports 50+ TLDs including compound (.com.cn) and Chinese TLDs
+
+**Example usage in Claude Code**:
+```
+Check if these domains are available: example.com, test.io, demo.ai
 ```
 
-## Claude Code Integration
+## Creating a New Server
 
-### Default Server
+1. Create `myserver.py`:
+   ```python
+   from fastmcp import FastMCP
 
-`fastmcp.json` is auto-detected. Already configured in `.mcp.json` as "Echo" server.
+   mcp = FastMCP("My Server")
 
-### Add More Servers
+   @mcp.tool
+   def my_tool(param: str) -> str:
+       """Tool description"""
+       return f"Result: {param}"
+   ```
 
-1. Create `myserver.py` and `myserver.fastmcp.json`:
+2. Create `myserver.fastmcp.json`:
    ```json
    {
      "source": {"path": "myserver.py", "entrypoint": "mcp"},
@@ -45,13 +68,15 @@ def my_tool(param: str) -> str:
    }
    ```
 
-2. Add to `.mcp.json`:
+3. Add to `.mcp.json`:
    ```json
    {
-     "My Server": {
-       "type": "stdio",
-       "command": "sh",
-       "args": ["-c", "uv run --with fastmcp fastmcp run myserver.fastmcp.json"]
+     "mcpServers": {
+       "My Server": {
+         "type": "stdio",
+         "command": "sh",
+         "args": ["-c", "uv run --with fastmcp fastmcp run myserver.fastmcp.json"]
+       }
      }
    }
    ```
