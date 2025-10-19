@@ -2,86 +2,26 @@
 
 Personal MCP servers collection using mise + Python 3.13 + FastMCP.
 
-## Project Structure
-
-```
-mcp/
-├── domains.py           # Domain registration checker
-├── domains.fastmcp.json # Domain checker config
-├── tests/               # Unit tests
-│   ├── test_domains.py
-│   └── fixtures/
-├── .mcp.json           # Claude Code configuration
-└── pyproject.toml      # Python dependencies
-```
-
 ## Quick Start
 
 ```bash
-# Install dependencies
-mise run install
-
-# Run tests
-python -m pytest tests/ -v
-
-# Available tasks
-mise tasks
+mise run install        # Install dependencies
+python -m pytest tests/ # Run tests
+mise tasks             # List available tasks
 ```
 
 ## Available Servers
 
-### Domain Checker
+### Domain Checker (`domains.py`)
 
-Check domain registration status via WHOIS with DNS fallback.
+Batch check domain registration status via WHOIS with DNS fallback.
+- **Tool**: `check_domains` - Check up to 50 domains
+- **Features**: Real-time progress, 50+ TLDs including .com.cn and Chinese TLDs
+- **Usage**: "Check if example.com and test.io are available"
 
-**Tool**: `check_domains`
-- Batch check up to 50 domains
-- Real-time progress reporting
-- WHOIS query with DNS fallback
-- Supports 50+ TLDs including compound (.com.cn) and Chinese TLDs
+## Development
 
-**Example usage in Claude Code**:
-```
-Check if these domains are available: example.com, test.io, demo.ai
-```
-
-## Creating a New Server
-
-1. Create `myserver.py`:
-   ```python
-   from fastmcp import FastMCP
-
-   mcp = FastMCP("My Server")
-
-   @mcp.tool
-   def my_tool(param: str) -> str:
-       """Tool description"""
-       return f"Result: {param}"
-   ```
-
-2. Create `myserver.fastmcp.json`:
-   ```json
-   {
-     "source": {"path": "myserver.py", "entrypoint": "mcp"},
-     "environment": {"type": "uv", "project": "."},
-     "deployment": {"transport": "stdio"}
-   }
-   ```
-
-3. Add to `.mcp.json`:
-   ```json
-   {
-     "mcpServers": {
-       "My Server": {
-         "type": "stdio",
-         "command": "sh",
-         "args": ["-c", "uv run --with fastmcp fastmcp run myserver.fastmcp.json"]
-       }
-     }
-   }
-   ```
-
-**Note**: Project name is `mcp-servers` (not `mcp`) to avoid package conflicts.
+To create a new server, see [FastMCP documentation](https://gofastmcp.com). Project uses `mcp-servers` package name to avoid conflicts.
 
 ## Links
 
