@@ -53,24 +53,43 @@ Test fixtures in `tests/fixtures/whois_responses.json` contain sample WHOIS resp
 
 When working with FastMCP, use Context7 MCP tool for up-to-date documentation:
 ```
-# First resolve the library ID (returns multiple options, choose highest trust score)
-mcp__Context7__resolve-library-id with libraryName="fastmcp"
-# Recommended: /jlowin/fastmcp (Trust Score: 9.3, 1218 code snippets)
+# Official FastMCP documentation (most comprehensive)
+mcp__Context7__get-library-docs with:
+  - context7CompatibleLibraryID="/llmstxt/gofastmcp_llms-full_txt"
+  - topic="tools server" (or any specific topic)
+  - tokens=2500 (adjust based on needed detail)
 
-# Then fetch documentation on specific topics
+# Alternative: GitHub source (if specific implementation needed)
 mcp__Context7__get-library-docs with:
   - context7CompatibleLibraryID="/jlowin/fastmcp"
-  - topic="tools" (or any specific topic)
-  - tokens=2000 (adjust based on needed detail)
+  - topic="your_topic"
 ```
 
-Common FastMCP documentation topics:
-- "tools" - Creating and managing MCP tools
-- "context" - Using Context for logging and progress
+**Recommended documentation source:** `/llmstxt/gofastmcp_llms-full_txt`
+- 12,289 code snippets (official FastMCP documentation)
+- Trust Score: 8.0
+
+**Common FastMCP documentation topics:**
+- "getting started" - Quickstart and installation
+- "decorators context" - Tool/prompt/resource decorators with Context
+- "tools server" - Server tool management and patterns
 - "testing" - Writing tests for MCP servers
-- "server" - Server setup and configuration
-- "client" - Client usage patterns
 - "deployment" - Deployment configurations
+- "client" - Client usage patterns
+
+**Key FastMCP patterns from docs:**
+```python
+# Tool with Context injection
+@mcp.tool
+async def process_file(file_uri: str, ctx: Context) -> str:
+    ctx.info("Processing file")  # Use context for logging
+    return "Result"
+
+# Resource definition
+@mcp.resource("resource://{city}/weather")
+def get_weather(city: str) -> str:
+    return f"Weather for {city}"
+```
 
 ## Adding New Servers
 
