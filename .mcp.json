@@ -9,11 +9,19 @@
     "Domain Checker": {
       "type": "stdio",
       "command": "sh",
+      "args": ["-c", "uv run --with fastmcp fastmcp run domains.fastmcp.json"],
+      "env": {}
+    },
+    "Gemini Alt Tag": {
+      "type": "stdio",
+      "command": "sh",
       "args": [
         "-c",
-        "uv run --with fastmcp fastmcp run domains.fastmcp.json"
+        "uv run --with fastmcp fastmcp run gemini_alt.fastmcp.json"
       ],
-      "env": {}
+      "env": {
+        "GEMINI_API_KEY": "your-gemini-api-key-here"
+      }
     }
   }
 }
