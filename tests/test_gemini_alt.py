@@ -262,13 +262,15 @@ class TestGeminiIntegration:
     """Test Gemini API integration."""
 
     @pytest.mark.asyncio
-    @patch('gemini_alt.model')
-    async def test_generate_alt_for_batch_success(self, mock_model):
+    @patch('gemini_alt.genai.GenerativeModel')
+    async def test_generate_alt_for_batch_success(self, mock_model_class):
         """Test successful batch alt tag generation."""
-        # Mock Gemini response
+        # Mock model instance
+        mock_model = MagicMock()
         mock_response = MagicMock()
         mock_response.text = '{"image_1": "Connect data sources button", "image_2": "Web selection dialog"}'
         mock_model.generate_content.return_value = mock_response
+        mock_model_class.return_value = mock_model
 
         # Create test images
         images = [
@@ -279,7 +281,7 @@ class TestGeminiIntegration:
         ctx = AsyncMock()
 
         # Generate alt tags
-        result = await gemini_alt.generate_alt_for_batch(images, None, ctx)
+        result = await gemini_alt.generate_alt_for_batch(images, None, "gemini-flash-latest", ctx)
 
         # Check results
         assert result["image_1"] == "Connect data sources button"
@@ -287,13 +289,15 @@ class TestGeminiIntegration:
         mock_model.generate_content.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch('gemini_alt.model')
-    async def test_generate_alt_for_batch_json_error(self, mock_model):
+    @patch('gemini_alt.genai.GenerativeModel')
+    async def test_generate_alt_for_batch_json_error(self, mock_model_class):
         """Test handling of JSON parsing errors."""
-        # Mock Gemini response with invalid JSON
+        # Mock model instance
+        mock_model = MagicMock()
         mock_response = MagicMock()
         mock_response.text = "This is not valid JSON"
         mock_model.generate_content.return_value = mock_response
+        mock_model_class.return_value = mock_model
 
         # Create test images
         images = [(b"fake_image", "image/jpeg")]
@@ -301,7 +305,7 @@ class TestGeminiIntegration:
         ctx = AsyncMock()
 
         # Generate alt tags
-        result = await gemini_alt.generate_alt_for_batch(images, None, ctx)
+        result = await gemini_alt.generate_alt_for_batch(images, None, "gemini-flash-latest", ctx)
 
         # Should fallback to generic alt text
         assert "image_1" in result
@@ -312,17 +316,19 @@ class TestGenerateAltTagsTool:
     """Test the main generate_alt_tags tool."""
 
     @pytest.mark.asyncio
-    @patch('gemini_alt.model')
+    @patch('gemini_alt.genai.GenerativeModel')
     @patch('gemini_alt.load_image')
-    async def test_generate_alt_tags_single_image(self, mock_load_image, mock_model):
+    async def test_generate_alt_tags_single_image(self, mock_load_image, mock_model_class):
         """Test generating alt tag for a single image."""
         # Mock image loading
         mock_load_image.return_value = (b"fake_image_data", "image/jpeg")
 
-        # Mock Gemini response
+        # Mock model instance
+        mock_model = MagicMock()
         mock_response = MagicMock()
         mock_response.text = "Facebook Pixel setup dialog"
         mock_model.generate_content.return_value = mock_response
+        mock_model_class.return_value = mock_model
 
         # Mock context
         ctx = AsyncMock()
@@ -332,6 +338,7 @@ class TestGenerateAltTagsTool:
             images=["test.png"],
             context=None,
             batch_size=5,
+            model=None,  # Use default model
             ctx=ctx
         )
 
@@ -342,9 +349,9 @@ class TestGenerateAltTagsTool:
         assert result.structured_content["stats"]["successful"] == 1
 
     @pytest.mark.asyncio
-    @patch('gemini_alt.model')
+    @patch('gemini_alt.genai.GenerativeModel')
     @patch('gemini_alt.load_image')
-    async def test_generate_alt_tags_multiple_images(self, mock_load_image, mock_model):
+    async def test_generate_alt_tags_multiple_images(self, mock_load_image, mock_model_class):
         """Test generating alt tags for multiple images."""
         # Mock image loading
         mock_load_image.side_effect = [
@@ -353,10 +360,12 @@ class TestGenerateAltTagsTool:
             (b"image3", "image/jpeg")
         ]
 
-        # Mock Gemini response for batch
+        # Mock model instance
+        mock_model = MagicMock()
         mock_response = MagicMock()
         mock_response.text = '{"image_1": "First image", "image_2": "Second image", "image_3": "Third image"}'
         mock_model.generate_content.return_value = mock_response
+        mock_model_class.return_value = mock_model
 
         # Mock context
         ctx = AsyncMock()
@@ -366,6 +375,7 @@ class TestGenerateAltTagsTool:
             images=["1.png", "2.png", "3.png"],
             context="Test document context",
             batch_size=5,
+            model=None,  # Use default model
             ctx=ctx
         )
 
@@ -376,9 +386,9 @@ class TestGenerateAltTagsTool:
         assert result.structured_content["alt_tags"]["3.png"] == "Third image"
 
     @pytest.mark.asyncio
-    @patch('gemini_alt.model')
+    @patch('gemini_alt.genai.GenerativeModel')
     @patch('gemini_alt.load_image')
-    async def test_generate_alt_tags_with_context_file(self, mock_load_image, mock_model, tmp_path):
+    async def test_generate_alt_tags_with_context_file(self, mock_load_image, mock_model_class, tmp_path):
         """Test generating alt tags with context loaded from a file."""
         # Create a context file
         context_file = tmp_path / "context.md"
@@ -388,10 +398,12 @@ class TestGenerateAltTagsTool:
         # Mock image loading
         mock_load_image.return_value = (b"fake_image_data", "image/jpeg")
 
-        # Mock Gemini response
+        # Mock model instance
+        mock_model = MagicMock()
         mock_response = MagicMock()
         mock_response.text = "Product interface screenshot"
         mock_model.generate_content.return_value = mock_response
+        mock_model_class.return_value = mock_model
 
         # Mock context
         ctx = AsyncMock()
@@ -401,6 +413,7 @@ class TestGenerateAltTagsTool:
             images=["test.png"],
             context=str(context_file),  # Pass file path instead of content
             batch_size=5,
+            model=None,  # Use default model
             ctx=ctx
         )
 
@@ -426,6 +439,7 @@ class TestGenerateAltTagsTool:
             images=["bad_image.png"],
             context=None,
             batch_size=5,
+            model=None,  # Use default model
             ctx=ctx
         )
 
@@ -458,6 +472,7 @@ class TestIntegrationWithFixtures:
             images=[str(fixtures_path / "1.png")],
             context=context,
             batch_size=5,
+            model=None,  # Use default model
             ctx=ctx
         )
 

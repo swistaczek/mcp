@@ -30,8 +30,8 @@ if not GEMINI_API_KEY:
 
 genai.configure(api_key=GEMINI_API_KEY)
 
-# Initialize the model - using the latest flash model for best performance/cost
-model = genai.GenerativeModel("gemini-flash-latest")
+# Default model for best performance/cost
+DEFAULT_MODEL = "gemini-flash-latest"
 
 
 def is_text_heavy_image(image: Image.Image) -> bool:
@@ -203,7 +203,7 @@ Your alt text should be:
 
 The image(s) appear in the following document context:
 ---
-{context[:2000]}  # Limit context to avoid token overflow
+{context}
 ---
 
 Generate alt text that is relevant to this specific context."""
@@ -229,6 +229,7 @@ Provide only the alt text, without any additional explanation or formatting."""
 async def generate_alt_for_batch(
     images: list[tuple[bytes, str]],
     context: Optional[str],
+    model_name: str,
     ctx: Context
 ) -> dict[str, str]:
     """
@@ -237,6 +238,7 @@ async def generate_alt_for_batch(
     Args:
         images: List of (image_bytes, mime_type) tuples
         context: Optional document context
+        model_name: Gemini model to use
         ctx: FastMCP context
 
     Returns:
@@ -255,6 +257,9 @@ async def generate_alt_for_batch(
         })
 
     try:
+        # Create model instance
+        model = genai.GenerativeModel(model_name)
+
         # Generate alt text using Gemini
         response = await asyncio.to_thread(
             model.generate_content,
@@ -307,6 +312,10 @@ async def generate_alt_tags(
         le=10,
         description="Maximum images to process in a single Gemini request"
     ),
+    model: Optional[str] = Field(
+        default=None,
+        description="Gemini model to use (e.g., 'gemini-pro', 'gemini-flash-latest'). Defaults to 'gemini-flash-latest'"
+    ),
     ctx: Context = None,
 ) -> ToolResult:
     """
@@ -318,8 +327,9 @@ async def generate_alt_tags(
     """
     total = len(images)
     start_time = datetime.now(timezone.utc)
+    model_name = model or DEFAULT_MODEL
 
-    await ctx.info(f"Starting alt tag generation for {total} image(s)")
+    await ctx.info(f"Starting alt tag generation for {total} image(s) using model: {model_name}")
 
     # Load context from file if needed
     loaded_context = await load_context(context, ctx)
@@ -368,8 +378,11 @@ async def generate_alt_tags(
                 prompt = create_alt_generation_prompt(loaded_context, is_batch=False)
                 image_bytes, mime_type = batch_images[0]
 
+                # Create model instance for single image
+                model_instance = genai.GenerativeModel(model_name)
+
                 response = await asyncio.to_thread(
-                    model.generate_content,
+                    model_instance.generate_content,
                     [
                         prompt,
                         {
@@ -391,6 +404,7 @@ async def generate_alt_tags(
                 alt_texts = await generate_alt_for_batch(
                     batch_images,
                     loaded_context,
+                    model_name,
                     ctx
                 )
 
@@ -444,7 +458,7 @@ async def generate_alt_tags(
             "stats": stats,
             "metadata": {
                 "generated_at": start_time.isoformat(),
-                "model": "gemini-flash-latest",
+                "model": model_name,
                 "context_provided": loaded_context is not None,
                 "batch_size": batch_size
             }
