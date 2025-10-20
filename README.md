@@ -19,6 +19,19 @@ Batch check domain registration status via WHOIS with DNS fallback.
 - **Features**: Real-time progress, 50+ TLDs including .com.cn and Chinese TLDs
 - **Usage**: "Check if example.com and test.io are available"
 
+### Gemini Alt Tag Generator (`gemini_alt.py`)
+
+Generate accessible alt tags for images using Google's Gemini LLM.
+- **Tool**: `generate_alt_tags` - Process up to 20 images with optional context
+- **Features**:
+  - Smart image optimization (adaptive resizing for text-heavy images)
+  - Batch processing (up to 10 images per request)
+  - Context from file or text (saves tokens for large documents)
+- **Setup**: Set `GEMINI_API_KEY` in `.env` file (get from [AI Studio](https://aistudio.google.com/))
+- **Usage**:
+  - `generate_alt_tags(images=["img.png"], context="./docs/guide.md")`
+  - Accepts image paths, URLs, or base64 data
+
 ## Development
 
 To create a new server, see [FastMCP documentation](https://gofastmcp.com). Project uses `mcp-servers` package name to avoid conflicts.
