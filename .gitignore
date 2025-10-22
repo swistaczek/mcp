@@ -51,3 +51,6 @@ htmlcov/
 
 # Logs
 *.log
+
+# Playwright MCP
+.playwright-mcp/*.png
