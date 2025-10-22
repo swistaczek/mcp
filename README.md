@@ -51,6 +51,33 @@ Generate accessible alt tags for images using Google's Gemini LLM.
   - `generate_alt_tags(images=["img.png"], context="./docs/guide.md")`
   - Accepts image paths, URLs, or base64 data
 
+### Tablica Rejestracyjna PL (`tablica.py`)
+
+Polish license plate reporting integration with tablica-rejestracyjna.pl.
+- **Tools**:
+  - `fetch_comments` - Get all comments/reports for a license plate
+  - `submit_complaint` - Submit new violation reports with images
+- **Features**: HEIC to JPEG conversion, automatic image optimization, LLM-guided workflow
+- **Usage**: "Fetch comments for plate WW12345" or "Submit complaint for plate with image"
+
+### EXIF Metadata Extractor (`exif_extractor.py`)
+
+Extract EXIF metadata from images with GPS reverse geocoding.
+- **Tool**: `analyze_image_metadata` - Extract metadata from up to 50 images
+- **Features**:
+  - GPS extraction (coordinates, altitude, speed, direction, timestamp)
+  - Reverse geocoding to street addresses (via Nominatim)
+  - Supports PNG, JPEG, HEIC formats
+- **Usage**: "Extract metadata from photo.heic" or "Get GPS location from these images"
+
+### Plate Recognition (`plate_recognition.py`)
+
+Analyze traffic photos to identify license plates and violations using Gemini Vision.
+- **Tool**: `recognize_plates` - Identify plates and determine violating vehicle
+- **Features**: Multi-vehicle support, violation detection, pedestrian-focused analysis
+- **Setup**: Set `GEMINI_API_KEY` in `.env` file
+- **Usage**: "Analyze violation.jpg and identify the violating vehicle"
+
 ## Development
 
 To create a new server, see [FastMCP documentation](https://gofastmcp.com). Project uses `mcp-servers` package name to avoid conflicts.
