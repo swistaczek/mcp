@@ -79,6 +79,7 @@ Integration with Polish license plate reporting website (tablica-rejestracyjna.p
 - `beautifulsoup4` + `lxml` - HTML parsing
 - `pillow-heif` - HEIC format support (optional but recommended)
 - `Pillow` - Image processing
+- `aioresponses` - HTTP mocking for async tests
 
 **Usage Example:**
 ```python
@@ -342,3 +343,21 @@ GitHub Actions runs on push to main and PRs:
 - Installs project with `pip install -e .`
 - Runs pytest with verbose output
 - Claude Code integration for PR reviews (claude-code-review.yml)
+
+**GitHub CLI (gh) debugging:**
+```bash
+# View GitHub Actions run logs (detailed output)
+gh run view <RUN_ID> --log
+
+# Extract test failures from logs
+gh run view <RUN_ID> --log | grep -A 50 "FAILED\|ERROR\|test session starts" | tail -100
+
+# Watch running workflow
+gh run watch <RUN_ID>
+
+# List recent runs
+gh run list --limit 10
+
+# Rerun failed jobs
+gh run rerun <RUN_ID>
+```
