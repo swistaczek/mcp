@@ -362,6 +362,7 @@ class TestSubmitComplaint:
     """Integration tests for submitting complaints with aioresponses mocking."""
 
     @pytest.mark.asyncio
+    @pytest.mark.skip(reason="Automated POST submission disabled to avoid IP bans - function now returns Playwright instructions")
     async def test_submit_establishes_session_before_post(self):
         """Test that submit makes GET request before POST."""
         from aioresponses import aioresponses
@@ -393,6 +394,7 @@ class TestSubmitComplaint:
             assert result.structured_content['success'] is True
 
     @pytest.mark.asyncio
+    @pytest.mark.skip(reason="Automated POST submission disabled to avoid IP bans - function now returns Playwright instructions")
     async def test_submit_extracts_csrf_token(self):
         """Test that submit detects and uses CSRF tokens."""
         from aioresponses import aioresponses
@@ -432,6 +434,7 @@ class TestSubmitComplaint:
             assert len(csrf_log) > 0
 
     @pytest.mark.asyncio
+    @pytest.mark.skip(reason="Automated POST submission disabled to avoid IP bans - function now returns Playwright instructions")
     async def test_submit_with_403_provides_debug_info(self):
         """Test that 403 errors provide comprehensive debug information."""
         from aioresponses import aioresponses

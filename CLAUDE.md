@@ -13,9 +13,10 @@ Personal MCP servers collection built with FastMCP framework. The project uses P
 mise run install              # Install project dependencies via uv
 
 # Testing
-python -m pytest tests/ -v    # Run full test suite
-python -m pytest tests/test_domains.py::TestTLDExtraction -v  # Run specific test class
-python -m pytest tests/ -k "chinese" -v  # Run tests matching pattern
+uv run pytest tests/ -v       # Run full test suite (73 passed, 14 skipped expected)
+uv run pytest tests/test_domains.py::TestTLDExtraction -v  # Run specific test class
+uv run pytest tests/ -k "chinese" -v  # Run tests matching pattern
+uv run pytest tests/ -m "not integration" -v  # Skip integration tests
 
 # Development
 mise tasks                    # List all available mise tasks

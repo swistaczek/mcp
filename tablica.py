@@ -366,7 +366,7 @@ async def submit_complaint(
         description="Path to the image file showing the violation (supports HEIC, JPG, PNG)"
     ),
     location: Optional[str] = Field(
-        None,
+        default=None,
         description="Optional: Specific location/address where violation occurred"
     ),
     ctx: Context = None
@@ -384,6 +384,11 @@ async def submit_complaint(
     Returns:
         ToolResult with submission status
     """
+    # Handle Field objects when function is called directly (e.g., in tests)
+    from pydantic.fields import FieldInfo
+    if isinstance(location, FieldInfo):
+        location = None
+
     # Validate plate format
     if not validate_polish_plate(plate_number):
         return ToolResult(
@@ -465,6 +470,17 @@ This approach:
 ✅ Works with site's bot protection
 """
 
+    # Prepare structured content (only include location if provided)
+    prepared_form_data = {
+        "plate": normalized_plate,
+        "description": violation_description,
+        "full_description": full_description,
+        "image_path": image_path,
+        "image_size_kb": image_size_kb
+    }
+    if location:
+        prepared_form_data["location"] = location
+
     return ToolResult(
         content=[{"type": "text", "text": playwright_instructions}],
         structured_content={
@@ -476,14 +492,7 @@ This approach:
             "url": url,
             "submission_method": "playwright_mcp_manual",
             "reason": "Automated POST requests are disabled to avoid IP bans. Use Playwright MCP for manual submission.",
-            "prepared_form_data": {
-                "plate": normalized_plate,
-                "description": violation_description,
-                "full_description": full_description,
-                "location": location,
-                "image_path": image_path,
-                "image_size_kb": image_size_kb
-            }
+            "prepared_form_data": prepared_form_data
         }
     )
 
