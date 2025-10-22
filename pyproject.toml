@@ -9,6 +9,10 @@ dependencies = [
     "Pillow>=10.0.0",
     "pytest-asyncio>=0.21.0",
     "python-dotenv>=1.0.0",
+    "aiohttp>=3.9.0",
+    "beautifulsoup4>=4.12.0",
+    "lxml>=5.0.0",
+    "pillow-heif>=0.13.0",
 ]
 
 [build-system]
@@ -16,7 +20,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["domains", "gemini_alt"]
+py-modules = ["domains", "gemini_alt", "tablica", "exif_extractor", "plate_recognition"]
 
 [tool.pytest.ini_options]
 markers = [

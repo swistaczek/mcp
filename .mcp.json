@@ -1,5 +1,11 @@
 {
   "mcpServers": {
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"],
+      "env": {}
+    },
     "Context7": {
       "type": "stdio",
       "command": "npx",
@@ -20,7 +26,33 @@
         "uv run --with fastmcp fastmcp run gemini_alt.fastmcp.json"
       ],
       "env": {
-        "GEMINI_API_KEY": "your-gemini-api-key-here"
+        "GEMINI_API_KEY": "${GEMINI_API_KEY}"
+      }
+    },
+    "Tablica Rejestracyjna PL": {
+      "type": "stdio",
+      "command": "sh",
+      "args": ["-c", "uv run --with fastmcp fastmcp run tablica.fastmcp.json"],
+      "env": {}
+    },
+    "EXIF Metadata Extractor": {
+      "type": "stdio",
+      "command": "sh",
+      "args": [
+        "-c",
+        "uv run --with fastmcp fastmcp run exif_extractor.fastmcp.json"
+      ],
+      "env": {}
+    },
+    "Plate Recognition": {
+      "type": "stdio",
+      "command": "sh",
+      "args": [
+        "-c",
+        "uv run --with fastmcp fastmcp run plate_recognition.fastmcp.json"
+      ],
+      "env": {
+        "GEMINI_API_KEY": "${GEMINI_API_KEY}"
       }
     }
   }

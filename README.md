@@ -10,6 +10,25 @@ python -m pytest tests/ # Run tests
 mise tasks             # List available tasks
 ```
 
+## Configuration
+
+API keys can be configured in two ways:
+
+1. **Claude Code settings** (recommended for Claude Code users):
+   - Add to `.claude/settings.local.json` (gitignored):
+     ```json
+     {
+       "env": {
+         "GEMINI_API_KEY": "your-key-here"
+       }
+     }
+     ```
+   - API keys are automatically available to all MCP servers
+
+2. **Environment file** (for other MCP clients):
+   - Copy `.env.example` to `.env` and add your keys
+   - Note: `.env` is gitignored to protect secrets
+
 ## Available Servers
 
 ### Domain Checker (`domains.py`)

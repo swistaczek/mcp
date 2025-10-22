@@ -1,0 +1,14 @@
+{
+  "$schema": "https://gofastmcp.com/public/schemas/fastmcp.json/v1.json",
+  "source": {
+    "path": "plate_recognition.py",
+    "entrypoint": "mcp"
+  },
+  "environment": {
+    "type": "uv",
+    "project": "."
+  },
+  "deployment": {
+    "transport": "stdio"
+  }
+}
