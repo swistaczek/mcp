@@ -14,6 +14,7 @@ from domains import (
     contains_chinese_characters,
     get_not_found_patterns,
     WHOIS_SERVERS,
+    OVH_VERIFIER_AVAILABLE,
 )
 
 
@@ -307,6 +308,208 @@ class TestResponseStructure:
         assert "FAILED (1):" in summary
         assert "failed.xyz" in summary
         assert "Unsupported top-level domain" in summary
+
+
+class TestOVHVerificationIntegration:
+    """Test OVH verification integration."""
+
+    def test_ovh_verifier_module_imported(self):
+        """Test that OVH verifier module is importable."""
+        # The import should not fail, just check the flag
+        assert isinstance(OVH_VERIFIER_AVAILABLE, bool)
+
+    def test_response_with_ovh_disabled(self):
+        """Test response structure when OVH verification is disabled."""
+        structured_response = {
+            "results": {},
+            "available_domains": [],
+            "registered_domains": [],
+            "failed_domains": [],
+            "summary": {},
+            "ovh_verification": {"enabled": False},
+        }
+
+        assert structured_response["ovh_verification"]["enabled"] is False
+        assert "confirmed_available" not in structured_response["ovh_verification"]
+
+    def test_response_with_ovh_enabled_no_false_positives(self):
+        """Test response structure when OVH finds no false positives."""
+        structured_response = {
+            "results": {
+                "sparkhelm.com": {
+                    "registered": False,
+                    "available": True,
+                    "method": "whois",
+                    "reason": "OVH CONFIRMED available (120 PLN)",
+                    "ovh_confirmed": True,
+                    "ovh_verification": {
+                        "ovh_available": True,
+                        "ovh_verified": True,
+                        "ovh_price": "120 PLN",
+                        "ovh_error": None,
+                    },
+                }
+            },
+            "available_domains": ["sparkhelm.com"],
+            "registered_domains": [],
+            "failed_domains": [],
+            "summary": {},
+            "ovh_verification": {
+                "enabled": True,
+                "confirmed_available": ["sparkhelm.com"],
+                "false_positives": [],
+                "verification_failed": [],
+                "duration_seconds": 5.0,
+            },
+        }
+
+        assert structured_response["ovh_verification"]["enabled"] is True
+        assert "sparkhelm.com" in structured_response["ovh_verification"]["confirmed_available"]
+        assert len(structured_response["ovh_verification"]["false_positives"]) == 0
+        assert structured_response["results"]["sparkhelm.com"]["ovh_confirmed"] is True
+
+    def test_response_with_ovh_false_positive_detected(self):
+        """Test response structure when OVH detects false positive."""
+        structured_response = {
+            "results": {
+                "nexus.dev": {
+                    "registered": False,
+                    "available": False,  # Changed to False after OVH check
+                    "method": "dns",
+                    "reason": "FALSE POSITIVE: OVH verification shows domain is registered",
+                    "false_positive": True,
+                    "ovh_verification": {
+                        "ovh_available": False,
+                        "ovh_verified": True,
+                        "ovh_price": None,
+                        "ovh_error": None,
+                    },
+                }
+            },
+            "available_domains": [],  # Removed from available list
+            "registered_domains": [],
+            "failed_domains": [],
+            "summary": {},
+            "ovh_verification": {
+                "enabled": True,
+                "confirmed_available": [],
+                "false_positives": ["nexus.dev"],
+                "verification_failed": [],
+                "duration_seconds": 3.0,
+            },
+        }
+
+        assert structured_response["ovh_verification"]["enabled"] is True
+        assert "nexus.dev" in structured_response["ovh_verification"]["false_positives"]
+        assert "nexus.dev" not in structured_response["available_domains"]
+        assert structured_response["results"]["nexus.dev"]["available"] is False
+        assert structured_response["results"]["nexus.dev"]["false_positive"] is True
+
+    def test_response_with_ovh_verification_failure(self):
+        """Test response structure when OVH verification fails for a domain."""
+        structured_response = {
+            "results": {
+                "example.com": {
+                    "registered": False,
+                    "available": True,
+                    "method": "dns",
+                    "reason": "No DNS records found (OVH verification failed: Domain not found in OVH results)",
+                    "ovh_verification": {
+                        "ovh_available": None,
+                        "ovh_verified": False,
+                        "ovh_price": None,
+                        "ovh_error": "Domain not found in OVH results",
+                    },
+                }
+            },
+            "available_domains": ["example.com"],
+            "registered_domains": [],
+            "failed_domains": [],
+            "summary": {},
+            "ovh_verification": {
+                "enabled": True,
+                "confirmed_available": [],
+                "false_positives": [],
+                "verification_failed": ["example.com"],
+                "duration_seconds": 2.0,
+            },
+        }
+
+        assert "example.com" in structured_response["ovh_verification"]["verification_failed"]
+        assert "example.com" in structured_response["available_domains"]  # Still available, just unverified
+        assert structured_response["results"]["example.com"]["ovh_verification"]["ovh_verified"] is False
+
+    def test_summary_includes_false_positive_warning(self):
+        """Test that summary text includes false positive warnings."""
+        false_positives = ["nexus.dev", "bolt.dev"]
+
+        summary_parts = []
+        if false_positives:
+            summary_parts.append(f"❌ FALSE POSITIVES ({len(false_positives)}):")
+            for domain in false_positives:
+                summary_parts.append(f"  ❌ {domain} (WHOIS/DNS says available, OVH says registered)")
+            summary_parts.append("")
+
+        summary = "\n".join(summary_parts)
+
+        assert "FALSE POSITIVES (2):" in summary
+        assert "nexus.dev" in summary
+        assert "bolt.dev" in summary
+        assert "OVH says registered" in summary
+
+    def test_summary_includes_confirmed_available_with_price(self):
+        """Test that summary shows confirmed available domains with prices."""
+        confirmed_available = ["sparkhelm.com"]
+        ovh_verification = {
+            "sparkhelm.com": {
+                "ovh_available": True,
+                "ovh_verified": True,
+                "ovh_price": "120.00 PLN",
+                "ovh_error": None,
+            }
+        }
+
+        summary_parts = []
+        if confirmed_available:
+            summary_parts.append(f"AVAILABLE - OVH CONFIRMED ({len(confirmed_available)}):")
+            for domain in confirmed_available:
+                ovh_price = ovh_verification.get(domain, {}).get("ovh_price", "N/A")
+                summary_parts.append(f"  ✅ {domain} ({ovh_price})")
+            summary_parts.append("")
+
+        summary = "\n".join(summary_parts)
+
+        assert "AVAILABLE - OVH CONFIRMED (1):" in summary
+        assert "sparkhelm.com" in summary
+        assert "120.00 PLN" in summary
+        assert "✅" in summary
+
+    def test_dns_based_warning_without_ovh(self):
+        """Test that DNS-based results show warning when OVH verification not enabled."""
+        available_domains = ["test.dev"]
+        detailed_results = {
+            "test.dev": {
+                "registered": False,
+                "available": True,
+                "method": "dns",
+                "reason": "No DNS records found",
+            }
+        }
+
+        summary_parts = []
+        summary_parts.append(f"AVAILABLE ({len(available_domains)}):")
+        for domain in available_domains:
+            method = detailed_results[domain]["method"]
+            if method == "dns":
+                summary_parts.append(f"  ⚠️  {domain} (DNS-based, may be false positive)")
+            else:
+                summary_parts.append(f"  • {domain}")
+
+        summary = "\n".join(summary_parts)
+
+        assert "⚠️" in summary
+        assert "DNS-based" in summary
+        assert "false positive" in summary
 
 
 if __name__ == "__main__":

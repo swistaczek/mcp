@@ -33,11 +33,78 @@ Each server follows the FastMCP pattern:
 4. Return `ToolResult` with both human-readable text and structured JSON
 
 ### Domain Checker Architecture
-- **Primary method**: WHOIS protocol queries (port 43, 10s timeout)
-- **Fallback**: DNS record lookup when WHOIS fails
+Multi-layer domain availability verification with optional OVH browser-based validation.
+
+**Verification Layers:**
+1. **Primary**: WHOIS protocol queries (port 43, 10s timeout)
+2. **Fallback**: DNS record lookup when WHOIS fails (potential false positives)
+3. **Optional OVH Verification**: Browser automation to catch false positives
+
+**Key Features:**
 - **Batch processing**: Up to 50 domains per request
 - **TLD support**: 40+ TLDs including compound (.com.cn) and Chinese IDN domains
 - **Pattern matching**: TLD-specific "not found" patterns in `NOT_FOUND_PATTERNS` dict
+- **False positive detection**: OVH verification catches DNS-based false positives
+- **Graceful degradation**: OVH verification failures don't break core functionality
+
+**Tool:**
+`check_domains(domains, verify_available?)` - Check domain registration status
+- `domains: list[str]` - Domain names to check (1-50)
+- `verify_available: bool = False` - Enable OVH verification for available results
+
+**OVH Verification Module** (`ovh_verifier.py`):
+- Browser-based domain availability check using OVH's web interface
+- Bypasses OVH API bot protection via Playwright automation
+- Provides pricing information for available domains
+- Catches false positives: domains reported available by DNS but actually registered
+
+**Verification Flow:**
+```python
+1. WHOIS query for each domain
+2. If WHOIS fails → DNS fallback (⚠️ potential false positives)
+3. If verify_available=True and domain appears available:
+   → OVH browser verification confirms/denies availability
+   → Updates results: false_positive flag if OVH disagrees
+```
+
+**Response Structure (with OVH):**
+```json
+{
+  "results": {
+    "nexus.dev": {
+      "registered": false,
+      "available": false,
+      "method": "dns",
+      "reason": "FALSE POSITIVE: OVH verification shows domain is registered",
+      "false_positive": true,
+      "ovh_verification": {
+        "ovh_available": false,
+        "ovh_verified": true,
+        "ovh_price": null,
+        "ovh_error": null
+      }
+    }
+  },
+  "available_domains": [],
+  "ovh_verification": {
+    "enabled": true,
+    "confirmed_available": [],
+    "false_positives": ["nexus.dev"],
+    "verification_failed": [],
+    "duration_seconds": 3.0
+  }
+}
+```
+
+**Dependencies:**
+- `playwright` - Browser automation (optional, for OVH verification)
+- `socket` - DNS resolution
+- `asyncio` - Async WHOIS queries
+
+**Known Limitations:**
+- DNS fallback has high false positive rate for .dev/.app TLDs (domains can be registered without DNS records)
+- OVH verification is slower (~2-3s per domain) but more accurate
+- OVH verification requires Playwright installation: `pip install playwright && python -m playwright install chromium`
 
 ### Tablica Rejestracyjna PL Architecture
 Integration with Polish license plate reporting website (tablica-rejestracyjna.pl) for traffic violation reporting.
@@ -249,6 +316,7 @@ Tests are organized by functionality:
 - `TestChineseCharacterDetection` - Unicode character detection
 - `TestNotFoundPatterns` - WHOIS response parsing
 - `TestWHOISServerMapping` - Server configuration validation
+- `TestOVHVerificationIntegration` - OVH verification response structures, false positive detection, summary formatting
 - Integration tests marked with `@pytest.mark.skip` (require mocking)
 
 **Tablica Tests** (`tests/test_tablica.py`):

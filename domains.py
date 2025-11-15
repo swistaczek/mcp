@@ -2,6 +2,7 @@
 FastMCP Domain Checker Server
 
 Checks domain registration status via WHOIS queries with DNS fallback.
+Optional OVH browser verification for domains reported as available.
 Supports batch checking up to 50 domains with progress reporting.
 """
 
@@ -13,6 +14,14 @@ from typing import Any
 from fastmcp import FastMCP, Context
 from fastmcp.tools.tool import ToolResult
 from pydantic import Field
+
+# Optional OVH verification support
+try:
+    from ovh_verifier import OVHVerifier, PLAYWRIGHT_AVAILABLE
+    OVH_VERIFIER_AVAILABLE = True
+except ImportError:
+    OVH_VERIFIER_AVAILABLE = False
+    PLAYWRIGHT_AVAILABLE = False
 
 
 mcp = FastMCP("Domain Checker")
@@ -213,6 +222,84 @@ async def check_single_domain(domain: str, ctx: Context) -> dict[str, Any]:
     }
 
 
+async def verify_with_ovh(
+    available_domains: list[str], ctx: Context
+) -> dict[str, dict[str, Any]]:
+    """
+    Verify domains using OVH browser automation.
+
+    Returns dict of domain -> verification result with keys:
+        - ovh_available: bool | None
+        - ovh_verified: bool
+        - ovh_price: str | None
+        - ovh_error: str | None
+    """
+    if not OVH_VERIFIER_AVAILABLE:
+        await ctx.warning("OVH verifier module not available")
+        return {
+            domain: {
+                "ovh_available": None,
+                "ovh_verified": False,
+                "ovh_price": None,
+                "ovh_error": "OVH verifier module not installed",
+            }
+            for domain in available_domains
+        }
+
+    if not PLAYWRIGHT_AVAILABLE:
+        await ctx.warning("Playwright not installed for OVH verification")
+        return {
+            domain: {
+                "ovh_available": None,
+                "ovh_verified": False,
+                "ovh_price": None,
+                "ovh_error": "Playwright not installed",
+            }
+            for domain in available_domains
+        }
+
+    await ctx.info(f"Starting OVH verification for {len(available_domains)} domain(s)")
+
+    async with OVHVerifier() as verifier:
+        if not verifier._initialized:
+            error_msg = verifier._error or "Failed to initialize OVH verifier"
+            await ctx.error(f"OVH initialization failed: {error_msg}")
+            return {
+                domain: {
+                    "ovh_available": None,
+                    "ovh_verified": False,
+                    "ovh_price": None,
+                    "ovh_error": error_msg,
+                }
+                for domain in available_domains
+            }
+
+        results = {}
+        for i, domain in enumerate(available_domains):
+            await ctx.debug(f"OVH verifying {domain} ({i+1}/{len(available_domains)})")
+            ovh_result = await verifier.verify_domain(domain)
+
+            results[domain] = {
+                "ovh_available": ovh_result.get("available"),
+                "ovh_verified": ovh_result.get("verified", False),
+                "ovh_price": ovh_result.get("price"),
+                "ovh_error": ovh_result.get("error"),
+            }
+
+            if ovh_result.get("verified"):
+                if ovh_result.get("available"):
+                    await ctx.info(f"{domain}: OVH CONFIRMED available")
+                else:
+                    await ctx.warning(f"{domain}: OVH says REGISTERED (false positive!)")
+            else:
+                await ctx.warning(f"{domain}: OVH verification failed - {ovh_result.get('error')}")
+
+            # Small delay between verifications
+            await asyncio.sleep(0.3)
+
+        return results
+
+
 @mcp.tool(
     name="check_domains",
     description="Check domain registration status via WHOIS/DNS. Max 50 domains.",
@@ -224,12 +311,17 @@ async def check_domains(
         max_length=50,
         description="List of domain names to check (1-50)",
     ),
+    verify_available: bool = Field(
+        default=False,
+        description="Verify 'available' results using OVH browser automation (slower but catches false positives)",
+    ),
     ctx: Context = None,
 ) -> ToolResult:
     """
     Check if multiple domain names are registered.
 
     Queries WHOIS servers for each domain, with DNS fallback if WHOIS fails.
+    Optional OVH verification for domains reported as available to catch false positives.
     Reports progress in real-time for batch operations.
     """
     total = len(domains)
@@ -287,6 +379,45 @@ async def check_domains(
         if status["method"] in ["failed", "unsupported"]
     ]
 
+    # OVH verification for available domains (if requested)
+    ovh_verification = {}
+    false_positives = []
+    confirmed_available = []
+    ovh_failed = []
+
+    if verify_available and available_domains:
+        await ctx.info(f"OVH verification requested for {len(available_domains)} available domain(s)")
+        ovh_verification = await verify_with_ovh(available_domains, ctx)
+
+        # Process OVH results to categorize domains
+        for domain in available_domains:
+            ovh_result = ovh_verification.get(domain, {})
+            ovh_available = ovh_result.get("ovh_available")
+            ovh_verified = ovh_result.get("ovh_verified", False)
+
+            # Update detailed results with OVH info
+            detailed_results[domain]["ovh_verification"] = ovh_result
+
+            if ovh_verified:
+                if ovh_available is False:
+                    # FALSE POSITIVE: WHOIS/DNS says available, OVH says registered
+                    false_positives.append(domain)
+                    detailed_results[domain]["available"] = False
+                    detailed_results[domain]["reason"] = "FALSE POSITIVE: OVH verification shows domain is registered"
+                    detailed_results[domain]["false_positive"] = True
+                elif ovh_available is True:
+                    confirmed_available.append(domain)
+                    detailed_results[domain]["reason"] = f"OVH CONFIRMED available ({ovh_result.get('ovh_price', 'N/A')})"
+                    detailed_results[domain]["ovh_confirmed"] = True
+            else:
+                ovh_failed.append(domain)
+                detailed_results[domain]["reason"] += f" (OVH verification failed: {ovh_result.get('ovh_error', 'unknown')})"
+
+        # Update available_domains list to exclude false positives
+        available_domains = [d for d in available_domains if d not in false_positives]
+
+    ovh_duration = (datetime.now(timezone.utc) - start_time).total_seconds() - duration
+
     structured_response = {
         "results": detailed_results,
         "available_domains": available_domains,
@@ -299,13 +430,51 @@ async def check_domains(
         },
     }
 
+    # Add OVH verification summary if used
+    if verify_available:
+        structured_response["ovh_verification"] = {
+            "enabled": True,
+            "confirmed_available": confirmed_available,
+            "false_positives": false_positives,
+            "verification_failed": ovh_failed,
+            "duration_seconds": round(ovh_duration, 2),
+        }
+    else:
+        structured_response["ovh_verification"] = {"enabled": False}
+
     # Human-readable summary with domain names
     summary_parts = [f"✓ Checked {total} domain(s) in {duration:.2f}s\n"]
 
+    if verify_available and available_domains:
+        summary_parts.append(f"OVH verification completed in {ovh_duration:.2f}s\n")
+
     if available_domains:
-        summary_parts.append(f"AVAILABLE ({len(available_domains)}):")
-        for domain in available_domains:
-            summary_parts.append(f"  • {domain}")
+        if verify_available and confirmed_available:
+            summary_parts.append(f"AVAILABLE - OVH CONFIRMED ({len(confirmed_available)}):")
+            for domain in confirmed_available:
+                ovh_price = ovh_verification.get(domain, {}).get("ovh_price", "N/A")
+                summary_parts.append(f"  ✅ {domain} ({ovh_price})")
+        else:
+            summary_parts.append(f"AVAILABLE ({len(available_domains)}):")
+            for domain in available_domains:
+                method = detailed_results[domain]["method"]
+                if method == "dns":
+                    summary_parts.append(f"  ⚠️  {domain} (DNS-based, may be false positive)")
+                else:
+                    summary_parts.append(f"  • {domain}")
+        summary_parts.append("")
+
+    if false_positives:
+        summary_parts.append(f"❌ FALSE POSITIVES ({len(false_positives)}):")
+        for domain in false_positives:
+            summary_parts.append(f"  ❌ {domain} (WHOIS/DNS says available, OVH says registered)")
+        summary_parts.append("")
+
+    if ovh_failed:
+        summary_parts.append(f"⚠️  OVH VERIFICATION FAILED ({len(ovh_failed)}):")
+        for domain in ovh_failed:
+            error = ovh_verification.get(domain, {}).get("ovh_error", "unknown")
+            summary_parts.append(f"  ⚠️  {domain} ({error})")
         summary_parts.append("")
 
     if registered_domains:
