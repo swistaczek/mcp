@@ -261,45 +261,69 @@ async def check_domains(
     duration = (datetime.now(timezone.utc) - start_time).total_seconds()
     await ctx.report_progress(total, total, f"Complete: checked {total} domain(s)")
 
-    simple_results = {
-        domain: {"registered": status["registered"]} for domain, status in results
+    detailed_results = {
+        domain: {
+            "registered": status["registered"],
+            "available": not status["registered"]
+            and status["method"] not in ["failed", "unsupported"],
+            "method": status["method"],
+            "reason": status["reason"],
+        }
+        for domain, status in results
     }
 
-    whois_successes = sum(
-        1 for _, s in results if s["method"] in ["whois", "dns"]
-    )
-    success_rate = whois_successes / total if total > 0 else 0
+    # Build convenience lists for quick access
+    available_domains = [
+        domain
+        for domain, status in results
+        if not status["registered"] and status["method"] not in ["failed", "unsupported"]
+    ]
+    registered_domains = [
+        domain for domain, status in results if status["registered"]
+    ]
+    failed_domains = [
+        domain
+        for domain, status in results
+        if status["method"] in ["failed", "unsupported"]
+    ]
 
     structured_response = {
-        "results": simple_results,
-        "stats": {
+        "results": detailed_results,
+        "available_domains": available_domains,
+        "registered_domains": registered_domains,
+        "failed_domains": failed_domains,
+        "summary": {
             "total": total,
-            "registered": stats["registered"],
-            "available": stats["available"],
-            "failed": stats["failed"],
             "duration_seconds": round(duration, 2),
-        },
-        "metadata": {
             "checked_at": start_time.isoformat(),
-            "tlds_queried": sorted(list(tlds_queried)),
-            "whois_success_rate": round(success_rate, 2),
-            "dns_fallback_count": sum(1 for _, s in results if s["method"] == "dns"),
         },
     }
 
-    # Human-readable summary
-    summary = f"""✓ Checked {total} domain(s) in {duration:.2f}s
+    # Human-readable summary with domain names
+    summary_parts = [f"✓ Checked {total} domain(s) in {duration:.2f}s\n"]
 
-Results:
-  • {stats['registered']} registered ({stats['registered']/total*100:.0f}%)
-  • {stats['available']} available ({stats['available']/total*100:.0f}%)
-  • {stats['failed']} failed ({stats['failed']/total*100:.0f}%)
+    if available_domains:
+        summary_parts.append(f"AVAILABLE ({len(available_domains)}):")
+        for domain in available_domains:
+            summary_parts.append(f"  • {domain}")
+        summary_parts.append("")
 
-Methods:
-  • WHOIS: {whois_successes} successful
-  • DNS fallback: {structured_response['metadata']['dns_fallback_count']} used"""
+    if registered_domains:
+        summary_parts.append(f"REGISTERED ({len(registered_domains)}):")
+        for domain in registered_domains:
+            summary_parts.append(f"  • {domain}")
+        summary_parts.append("")
+
+    if failed_domains:
+        summary_parts.append(f"FAILED ({len(failed_domains)}):")
+        for domain in failed_domains:
+            reason = detailed_results[domain]["reason"]
+            summary_parts.append(f"  • {domain} ({reason})")
+        summary_parts.append("")
+
+    summary = "\n".join(summary_parts).rstrip()
 
     return ToolResult(
         content=[{"type": "text", "text": summary}],
-        structured_content=structured_response
+        structured_content=structured_response,
     )

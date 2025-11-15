@@ -126,5 +126,188 @@ class TestDomainChecking:
         pass
 
 
+class TestResponseStructure:
+    """Test the structure of check_domains response."""
+
+    @pytest.fixture
+    def mock_results(self):
+        """Create mock results for testing response structure."""
+        return [
+            (
+                "available.com",
+                {
+                    "registered": False,
+                    "method": "whois",
+                    "reason": "Domain available according to WHOIS",
+                },
+            ),
+            (
+                "registered.org",
+                {
+                    "registered": True,
+                    "method": "whois",
+                    "reason": "Domain registered according to WHOIS",
+                },
+            ),
+            (
+                "failed.xyz",
+                {
+                    "registered": False,
+                    "method": "unsupported",
+                    "reason": "Unsupported top-level domain: xyz",
+                },
+            ),
+            (
+                "dns-available.io",
+                {
+                    "registered": False,
+                    "method": "dns",
+                    "reason": "No DNS records found",
+                },
+            ),
+        ]
+
+    def test_detailed_results_structure(self, mock_results):
+        """Test that detailed_results includes all fields."""
+        detailed_results = {
+            domain: {
+                "registered": status["registered"],
+                "available": not status["registered"]
+                and status["method"] not in ["failed", "unsupported"],
+                "method": status["method"],
+                "reason": status["reason"],
+            }
+            for domain, status in mock_results
+        }
+
+        # Check available domain
+        assert detailed_results["available.com"]["registered"] is False
+        assert detailed_results["available.com"]["available"] is True
+        assert detailed_results["available.com"]["method"] == "whois"
+        assert "Domain available" in detailed_results["available.com"]["reason"]
+
+        # Check registered domain
+        assert detailed_results["registered.org"]["registered"] is True
+        assert detailed_results["registered.org"]["available"] is False
+        assert detailed_results["registered.org"]["method"] == "whois"
+
+        # Check failed domain - not available because check failed
+        assert detailed_results["failed.xyz"]["registered"] is False
+        assert detailed_results["failed.xyz"]["available"] is False
+        assert detailed_results["failed.xyz"]["method"] == "unsupported"
+
+        # Check DNS-based available domain
+        assert detailed_results["dns-available.io"]["available"] is True
+        assert detailed_results["dns-available.io"]["method"] == "dns"
+
+    def test_available_domains_list(self, mock_results):
+        """Test that available_domains list is correctly populated."""
+        available_domains = [
+            domain
+            for domain, status in mock_results
+            if not status["registered"]
+            and status["method"] not in ["failed", "unsupported"]
+        ]
+
+        assert "available.com" in available_domains
+        assert "dns-available.io" in available_domains
+        assert "registered.org" not in available_domains
+        assert "failed.xyz" not in available_domains
+        assert len(available_domains) == 2
+
+    def test_registered_domains_list(self, mock_results):
+        """Test that registered_domains list is correctly populated."""
+        registered_domains = [
+            domain for domain, status in mock_results if status["registered"]
+        ]
+
+        assert "registered.org" in registered_domains
+        assert "available.com" not in registered_domains
+        assert len(registered_domains) == 1
+
+    def test_failed_domains_list(self, mock_results):
+        """Test that failed_domains list is correctly populated."""
+        failed_domains = [
+            domain
+            for domain, status in mock_results
+            if status["method"] in ["failed", "unsupported"]
+        ]
+
+        assert "failed.xyz" in failed_domains
+        assert "available.com" not in failed_domains
+        assert len(failed_domains) == 1
+
+    def test_summary_text_includes_available_domains(self, mock_results):
+        """Test that human-readable summary includes available domain names."""
+        available_domains = [
+            domain
+            for domain, status in mock_results
+            if not status["registered"]
+            and status["method"] not in ["failed", "unsupported"]
+        ]
+
+        summary_parts = ["✓ Checked 4 domain(s) in 1.00s\n"]
+        if available_domains:
+            summary_parts.append(f"AVAILABLE ({len(available_domains)}):")
+            for domain in available_domains:
+                summary_parts.append(f"  • {domain}")
+            summary_parts.append("")
+
+        summary = "\n".join(summary_parts)
+
+        assert "AVAILABLE (2):" in summary
+        assert "available.com" in summary
+        assert "dns-available.io" in summary
+
+    def test_summary_text_includes_registered_domains(self, mock_results):
+        """Test that human-readable summary includes registered domain names."""
+        registered_domains = [
+            domain for domain, status in mock_results if status["registered"]
+        ]
+
+        summary_parts = []
+        if registered_domains:
+            summary_parts.append(f"REGISTERED ({len(registered_domains)}):")
+            for domain in registered_domains:
+                summary_parts.append(f"  • {domain}")
+
+        summary = "\n".join(summary_parts)
+
+        assert "REGISTERED (1):" in summary
+        assert "registered.org" in summary
+
+    def test_summary_text_includes_failed_domains_with_reasons(self, mock_results):
+        """Test that human-readable summary includes failed domains with reasons."""
+        detailed_results = {
+            domain: {
+                "registered": status["registered"],
+                "available": not status["registered"]
+                and status["method"] not in ["failed", "unsupported"],
+                "method": status["method"],
+                "reason": status["reason"],
+            }
+            for domain, status in mock_results
+        }
+
+        failed_domains = [
+            domain
+            for domain, status in mock_results
+            if status["method"] in ["failed", "unsupported"]
+        ]
+
+        summary_parts = []
+        if failed_domains:
+            summary_parts.append(f"FAILED ({len(failed_domains)}):")
+            for domain in failed_domains:
+                reason = detailed_results[domain]["reason"]
+                summary_parts.append(f"  • {domain} ({reason})")
+
+        summary = "\n".join(summary_parts)
+
+        assert "FAILED (1):" in summary
+        assert "failed.xyz" in summary
+        assert "Unsupported top-level domain" in summary
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
