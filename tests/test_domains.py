@@ -342,21 +342,27 @@ class TestOVHVerificationIntegration:
                     "method": "whois",
                     "reason": "OVH CONFIRMED available (120 PLN)",
                     "ovh_confirmed": True,
+                    "standard_price": "120 PLN",
                     "ovh_verification": {
                         "ovh_available": True,
                         "ovh_verified": True,
                         "ovh_price": "120 PLN",
+                        "ovh_price_type": "standard",
+                        "ovh_is_aftermarket": False,
+                        "ovh_aftermarket_type": None,
                         "ovh_error": None,
                     },
                 }
             },
             "available_domains": ["sparkhelm.com"],
+            "aftermarket_domains": [],
             "registered_domains": [],
             "failed_domains": [],
             "summary": {},
             "ovh_verification": {
                 "enabled": True,
                 "confirmed_available": ["sparkhelm.com"],
+                "aftermarket": [],
                 "false_positives": [],
                 "verification_failed": [],
                 "duration_seconds": 5.0,
@@ -366,7 +372,9 @@ class TestOVHVerificationIntegration:
         assert structured_response["ovh_verification"]["enabled"] is True
         assert "sparkhelm.com" in structured_response["ovh_verification"]["confirmed_available"]
         assert len(structured_response["ovh_verification"]["false_positives"]) == 0
+        assert len(structured_response["ovh_verification"]["aftermarket"]) == 0
         assert structured_response["results"]["sparkhelm.com"]["ovh_confirmed"] is True
+        assert structured_response["results"]["sparkhelm.com"]["standard_price"] == "120 PLN"
 
     def test_response_with_ovh_false_positive_detected(self):
         """Test response structure when OVH detects false positive."""
@@ -382,17 +390,22 @@ class TestOVHVerificationIntegration:
                         "ovh_available": False,
                         "ovh_verified": True,
                         "ovh_price": None,
+                        "ovh_price_type": None,
+                        "ovh_is_aftermarket": False,
+                        "ovh_aftermarket_type": None,
                         "ovh_error": None,
                     },
                 }
             },
             "available_domains": [],  # Removed from available list
+            "aftermarket_domains": [],
             "registered_domains": [],
             "failed_domains": [],
             "summary": {},
             "ovh_verification": {
                 "enabled": True,
                 "confirmed_available": [],
+                "aftermarket": [],
                 "false_positives": ["nexus.dev"],
                 "verification_failed": [],
                 "duration_seconds": 3.0,
@@ -404,6 +417,95 @@ class TestOVHVerificationIntegration:
         assert "nexus.dev" not in structured_response["available_domains"]
         assert structured_response["results"]["nexus.dev"]["available"] is False
         assert structured_response["results"]["nexus.dev"]["false_positive"] is True
+
+    def test_response_with_ovh_aftermarket_detected(self):
+        """Test response structure when OVH detects aftermarket/premium domain."""
+        structured_response = {
+            "results": {
+                "catch.dev": {
+                    "registered": False,
+                    "available": False,  # Not available for standard registration
+                    "method": "dns",
+                    "reason": "AFTERMARKET: Domain on secondary market (Premium) - 1 384,70 zł",
+                    "aftermarket": True,
+                    "aftermarket_type": "Premium",
+                    "aftermarket_price": "1 384,70 zł",
+                    "ovh_verification": {
+                        "ovh_available": False,
+                        "ovh_verified": True,
+                        "ovh_price": "1 384,70 zł",
+                        "ovh_price_type": "premium",
+                        "ovh_is_aftermarket": True,
+                        "ovh_aftermarket_type": "Premium",
+                        "ovh_error": None,
+                    },
+                }
+            },
+            "available_domains": [],  # NOT in available list
+            "aftermarket_domains": ["catch.dev"],  # In aftermarket list
+            "registered_domains": [],
+            "failed_domains": [],
+            "summary": {},
+            "ovh_verification": {
+                "enabled": True,
+                "confirmed_available": [],
+                "aftermarket": ["catch.dev"],
+                "false_positives": [],
+                "verification_failed": [],
+                "duration_seconds": 3.0,
+            },
+        }
+
+        assert structured_response["ovh_verification"]["enabled"] is True
+        assert "catch.dev" in structured_response["ovh_verification"]["aftermarket"]
+        assert "catch.dev" not in structured_response["available_domains"]
+        assert "catch.dev" in structured_response["aftermarket_domains"]
+        assert structured_response["results"]["catch.dev"]["available"] is False
+        assert structured_response["results"]["catch.dev"]["aftermarket"] is True
+        assert structured_response["results"]["catch.dev"]["aftermarket_type"] == "Premium"
+        assert structured_response["results"]["catch.dev"]["aftermarket_price"] == "1 384,70 zł"
+        assert structured_response["results"]["catch.dev"]["ovh_verification"]["ovh_is_aftermarket"] is True
+
+    def test_response_with_third_party_aftermarket(self):
+        """Test response structure for third-party aftermarket domain."""
+        structured_response = {
+            "results": {
+                "catch.io": {
+                    "registered": False,
+                    "available": False,
+                    "method": "dns",
+                    "reason": "AFTERMARKET: Domain on secondary market (Sprzedaż przez stronę trzecią) - 639 514,20 zł",
+                    "aftermarket": True,
+                    "aftermarket_type": "Sprzedaż przez stronę trzecią",
+                    "aftermarket_price": "639 514,20 zł",
+                    "ovh_verification": {
+                        "ovh_available": False,
+                        "ovh_verified": True,
+                        "ovh_price": "639 514,20 zł",
+                        "ovh_price_type": "third_party",
+                        "ovh_is_aftermarket": True,
+                        "ovh_aftermarket_type": "Sprzedaż przez stronę trzecią",
+                        "ovh_error": None,
+                    },
+                }
+            },
+            "available_domains": [],
+            "aftermarket_domains": ["catch.io"],
+            "registered_domains": [],
+            "failed_domains": [],
+            "summary": {},
+            "ovh_verification": {
+                "enabled": True,
+                "confirmed_available": [],
+                "aftermarket": ["catch.io"],
+                "false_positives": [],
+                "verification_failed": [],
+                "duration_seconds": 3.0,
+            },
+        }
+
+        assert structured_response["results"]["catch.io"]["aftermarket_type"] == "Sprzedaż przez stronę trzecią"
+        assert structured_response["results"]["catch.io"]["ovh_verification"]["ovh_price_type"] == "third_party"
 
     def test_response_with_ovh_verification_failure(self):
         """Test response structure when OVH verification fails for a domain."""
@@ -510,6 +612,50 @@ class TestOVHVerificationIntegration:
         assert "⚠️" in summary
         assert "DNS-based" in summary
         assert "false positive" in summary
+
+    def test_summary_includes_aftermarket_domains(self):
+        """Test that summary shows aftermarket domains with pricing."""
+        aftermarket_domains = ["catch.dev", "catch.io"]
+        ovh_verification = {
+            "catch.dev": {
+                "ovh_available": False,
+                "ovh_verified": True,
+                "ovh_price": "1 384,70 zł",
+                "ovh_price_type": "premium",
+                "ovh_is_aftermarket": True,
+                "ovh_aftermarket_type": "Premium",
+                "ovh_error": None,
+            },
+            "catch.io": {
+                "ovh_available": False,
+                "ovh_verified": True,
+                "ovh_price": "639 514,20 zł",
+                "ovh_price_type": "third_party",
+                "ovh_is_aftermarket": True,
+                "ovh_aftermarket_type": "Sprzedaż przez stronę trzecią",
+                "ovh_error": None,
+            },
+        }
+
+        summary_parts = []
+        if aftermarket_domains:
+            summary_parts.append(f"💰 AFTERMARKET - Secondary Market ({len(aftermarket_domains)}):")
+            for domain in aftermarket_domains:
+                ovh_result = ovh_verification.get(domain, {})
+                aftermarket_type = ovh_result.get("ovh_aftermarket_type", "aftermarket")
+                price = ovh_result.get("ovh_price", "N/A")
+                summary_parts.append(f"  💰 {domain} ({aftermarket_type}) - {price}")
+            summary_parts.append("")
+
+        summary = "\n".join(summary_parts)
+
+        assert "AFTERMARKET - Secondary Market (2):" in summary
+        assert "catch.dev" in summary
+        assert "catch.io" in summary
+        assert "Premium" in summary
+        assert "1 384,70 zł" in summary
+        assert "639 514,20 zł" in summary
+        assert "💰" in summary
 
 
 if __name__ == "__main__":

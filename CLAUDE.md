@@ -57,44 +57,86 @@ Multi-layer domain availability verification with optional OVH browser-based val
 - Bypasses OVH API bot protection via Playwright automation
 - Provides pricing information for available domains
 - Catches false positives: domains reported available by DNS but actually registered
+- **Detects aftermarket/premium domains**: Distinguishes between standard registration and secondary market
+
+**Aftermarket Detection:**
+OVH displays domain type labels that indicate aftermarket/resale domains:
+- **"Premium"** - Premium domains sold at higher prices
+- **"Sprzedaż przez stronę trzecią"** - Third-party sales (external marketplace)
+
+The verifier parses these labels and marks such domains as NOT available for standard registration.
 
 **Verification Flow:**
 ```python
 1. WHOIS query for each domain
 2. If WHOIS fails → DNS fallback (⚠️ potential false positives)
 3. If verify_available=True and domain appears available:
-   → OVH browser verification confirms/denies availability
-   → Updates results: false_positive flag if OVH disagrees
+   → OVH browser verification checks availability
+   → Detects aftermarket labels (Premium, third-party)
+   → Aftermarket domains marked as NOT available
+   → False positives flagged if OVH says registered
 ```
 
-**Response Structure (with OVH):**
+**Response Structure (with OVH and Aftermarket):**
 ```json
 {
   "results": {
-    "nexus.dev": {
+    "catch.dev": {
       "registered": false,
       "available": false,
       "method": "dns",
-      "reason": "FALSE POSITIVE: OVH verification shows domain is registered",
-      "false_positive": true,
+      "reason": "AFTERMARKET: Domain on secondary market (Premium) - 1 384,70 zł",
+      "aftermarket": true,
+      "aftermarket_type": "Premium",
+      "aftermarket_price": "1 384,70 zł",
       "ovh_verification": {
         "ovh_available": false,
         "ovh_verified": true,
-        "ovh_price": null,
+        "ovh_price": "1 384,70 zł",
+        "ovh_price_type": "premium",
+        "ovh_is_aftermarket": true,
+        "ovh_aftermarket_type": "Premium",
+        "ovh_error": null
+      }
+    },
+    "erne.dev": {
+      "registered": false,
+      "available": true,
+      "method": "dns",
+      "reason": "OVH CONFIRMED available (23,39 zł)",
+      "ovh_confirmed": true,
+      "standard_price": "23,39 zł",
+      "ovh_verification": {
+        "ovh_available": true,
+        "ovh_verified": true,
+        "ovh_price": "23,39 zł",
+        "ovh_price_type": "standard",
+        "ovh_is_aftermarket": false,
+        "ovh_aftermarket_type": null,
         "ovh_error": null
       }
     }
   },
-  "available_domains": [],
+  "available_domains": ["erne.dev"],
+  "aftermarket_domains": ["catch.dev"],
+  "registered_domains": [],
+  "failed_domains": [],
   "ovh_verification": {
     "enabled": true,
-    "confirmed_available": [],
-    "false_positives": ["nexus.dev"],
+    "confirmed_available": ["erne.dev"],
+    "aftermarket": ["catch.dev"],
+    "false_positives": [],
     "verification_failed": [],
-    "duration_seconds": 3.0
+    "duration_seconds": 18.36
   }
 }
 ```
+
+**Domain Categories:**
+- `available_domains` - Standard registration at normal prices
+- `aftermarket_domains` - Secondary market (Premium/third-party) with high prices
+- `registered_domains` - Already registered, not for sale
+- `failed_domains` - Check failed (unsupported TLD, network error)
 
 **Dependencies:**
 - `playwright` - Browser automation (optional, for OVH verification)
@@ -105,6 +147,7 @@ Multi-layer domain availability verification with optional OVH browser-based val
 - DNS fallback has high false positive rate for .dev/.app TLDs (domains can be registered without DNS records)
 - OVH verification is slower (~2-3s per domain) but more accurate
 - OVH verification requires Playwright installation: `pip install playwright && python -m playwright install chromium`
+- Aftermarket prices can be 10-100x standard registration prices
 
 ### Tablica Rejestracyjna PL Architecture
 Integration with Polish license plate reporting website (tablica-rejestracyjna.pl) for traffic violation reporting.

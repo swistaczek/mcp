@@ -79,9 +79,12 @@ class OVHVerifier:
         Verify domain availability using OVH web interface.
 
         Returns dict with:
-            - available: bool | None
-            - action: 'create' | 'transfer' | None
+            - available: bool | None (True only for standard registration, False for aftermarket/registered)
+            - action: 'create' | 'transfer' | 'buy_aftermarket' | None
             - price: str | None
+            - price_type: 'standard' | 'premium' | 'third_party' | None
+            - is_aftermarket: bool (True if domain is on secondary market)
+            - aftermarket_type: str | None ('Premium' or 'Sprzedaż przez stronę trzecią')
             - verified: bool (True if OVH verification succeeded)
             - error: str | None
         """
@@ -90,6 +93,9 @@ class OVHVerifier:
                 "available": None,
                 "action": None,
                 "price": None,
+                "price_type": None,
+                "is_aftermarket": False,
+                "aftermarket_type": None,
                 "verified": False,
                 "error": self._error or "OVH verifier not initialized"
             }
@@ -114,6 +120,9 @@ class OVHVerifier:
                         available: null,
                         action: null,
                         price: null,
+                        price_type: null,
+                        is_aftermarket: false,
+                        aftermarket_type: null,
                         verified: false,
                         error: null
                     }};
@@ -133,9 +142,21 @@ class OVHVerifier:
                             if (domainMatch && domainMatch[1] === domain) {{
                                 results.verified = true;
 
-                                if (domainText.includes('Dostępny')) {{
+                                // Check for aftermarket indicators BEFORE availability
+                                const isPremium = domainText.includes('Premium');
+                                const isThirdParty = domainText.includes('Sprzedaż przez stronę trzecią');
+
+                                if (isPremium || isThirdParty) {{
+                                    results.is_aftermarket = true;
+                                    results.aftermarket_type = isPremium ? 'Premium' : 'Sprzedaż przez stronę trzecią';
+                                    results.price_type = isPremium ? 'premium' : 'third_party';
+                                    results.action = 'buy_aftermarket';
+                                    // Aftermarket domains are NOT truly available for standard registration
+                                    results.available = false;
+                                }} else if (domainText.includes('Dostępny')) {{
                                     results.available = true;
                                     results.action = 'create';
+                                    results.price_type = 'standard';
                                 }} else if (domainText.includes('zarezerwowana') || domainText.includes('Już zarezerwowana')) {{
                                     results.available = false;
                                     results.action = 'transfer';

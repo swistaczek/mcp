@@ -229,9 +229,12 @@ async def verify_with_ovh(
     Verify domains using OVH browser automation.
 
     Returns dict of domain -> verification result with keys:
-        - ovh_available: bool | None
+        - ovh_available: bool | None (True only for standard registration)
         - ovh_verified: bool
         - ovh_price: str | None
+        - ovh_price_type: 'standard' | 'premium' | 'third_party' | None
+        - ovh_is_aftermarket: bool
+        - ovh_aftermarket_type: str | None
         - ovh_error: str | None
     """
     if not OVH_VERIFIER_AVAILABLE:
@@ -241,6 +244,9 @@ async def verify_with_ovh(
                 "ovh_available": None,
                 "ovh_verified": False,
                 "ovh_price": None,
+                "ovh_price_type": None,
+                "ovh_is_aftermarket": False,
+                "ovh_aftermarket_type": None,
                 "ovh_error": "OVH verifier module not installed",
             }
             for domain in available_domains
@@ -253,6 +259,9 @@ async def verify_with_ovh(
                 "ovh_available": None,
                 "ovh_verified": False,
                 "ovh_price": None,
+                "ovh_price_type": None,
+                "ovh_is_aftermarket": False,
+                "ovh_aftermarket_type": None,
                 "ovh_error": "Playwright not installed",
             }
             for domain in available_domains
@@ -269,6 +278,9 @@ async def verify_with_ovh(
                     "ovh_available": None,
                     "ovh_verified": False,
                     "ovh_price": None,
+                    "ovh_price_type": None,
+                    "ovh_is_aftermarket": False,
+                    "ovh_aftermarket_type": None,
                     "ovh_error": error_msg,
                 }
                 for domain in available_domains
@@ -283,12 +295,19 @@ async def verify_with_ovh(
                 "ovh_available": ovh_result.get("available"),
                 "ovh_verified": ovh_result.get("verified", False),
                 "ovh_price": ovh_result.get("price"),
+                "ovh_price_type": ovh_result.get("price_type"),
+                "ovh_is_aftermarket": ovh_result.get("is_aftermarket", False),
+                "ovh_aftermarket_type": ovh_result.get("aftermarket_type"),
                 "ovh_error": ovh_result.get("error"),
             }
 
             if ovh_result.get("verified"):
-                if ovh_result.get("available"):
-                    await ctx.info(f"{domain}: OVH CONFIRMED available")
+                if ovh_result.get("is_aftermarket"):
+                    aftermarket_type = ovh_result.get("aftermarket_type", "aftermarket")
+                    price = ovh_result.get("price", "N/A")
+                    await ctx.warning(f"{domain}: AFTERMARKET domain ({aftermarket_type}) - {price}")
+                elif ovh_result.get("available"):
+                    await ctx.info(f"{domain}: OVH CONFIRMED available (standard registration)")
                 else:
                     await ctx.warning(f"{domain}: OVH says REGISTERED (false positive!)")
             else:
@@ -382,6 +401,7 @@ async def check_domains(
     # OVH verification for available domains (if requested)
     ovh_verification = {}
     false_positives = []
+    aftermarket_domains = []
     confirmed_available = []
     ovh_failed = []
 
@@ -394,12 +414,23 @@ async def check_domains(
             ovh_result = ovh_verification.get(domain, {})
             ovh_available = ovh_result.get("ovh_available")
             ovh_verified = ovh_result.get("ovh_verified", False)
+            ovh_is_aftermarket = ovh_result.get("ovh_is_aftermarket", False)
 
             # Update detailed results with OVH info
             detailed_results[domain]["ovh_verification"] = ovh_result
 
             if ovh_verified:
-                if ovh_available is False:
+                if ovh_is_aftermarket:
+                    # AFTERMARKET: Domain is on secondary market (Premium or third-party)
+                    aftermarket_domains.append(domain)
+                    detailed_results[domain]["available"] = False
+                    aftermarket_type = ovh_result.get("ovh_aftermarket_type", "aftermarket")
+                    price = ovh_result.get("ovh_price", "N/A")
+                    detailed_results[domain]["reason"] = f"AFTERMARKET: Domain on secondary market ({aftermarket_type}) - {price}"
+                    detailed_results[domain]["aftermarket"] = True
+                    detailed_results[domain]["aftermarket_type"] = aftermarket_type
+                    detailed_results[domain]["aftermarket_price"] = price
+                elif ovh_available is False:
                     # FALSE POSITIVE: WHOIS/DNS says available, OVH says registered
                     false_positives.append(domain)
                     detailed_results[domain]["available"] = False
@@ -407,20 +438,23 @@ async def check_domains(
                     detailed_results[domain]["false_positive"] = True
                 elif ovh_available is True:
                     confirmed_available.append(domain)
-                    detailed_results[domain]["reason"] = f"OVH CONFIRMED available ({ovh_result.get('ovh_price', 'N/A')})"
+                    price = ovh_result.get("ovh_price", "N/A")
+                    detailed_results[domain]["reason"] = f"OVH CONFIRMED available ({price})"
                     detailed_results[domain]["ovh_confirmed"] = True
+                    detailed_results[domain]["standard_price"] = price
             else:
                 ovh_failed.append(domain)
                 detailed_results[domain]["reason"] += f" (OVH verification failed: {ovh_result.get('ovh_error', 'unknown')})"
 
-        # Update available_domains list to exclude false positives
-        available_domains = [d for d in available_domains if d not in false_positives]
+        # Update available_domains list to exclude false positives and aftermarket
+        available_domains = [d for d in available_domains if d not in false_positives and d not in aftermarket_domains]
 
     ovh_duration = (datetime.now(timezone.utc) - start_time).total_seconds() - duration
 
     structured_response = {
         "results": detailed_results,
         "available_domains": available_domains,
+        "aftermarket_domains": aftermarket_domains,
         "registered_domains": registered_domains,
         "failed_domains": failed_domains,
         "summary": {
@@ -435,6 +469,7 @@ async def check_domains(
         structured_response["ovh_verification"] = {
             "enabled": True,
             "confirmed_available": confirmed_available,
+            "aftermarket": aftermarket_domains,
             "false_positives": false_positives,
             "verification_failed": ovh_failed,
             "duration_seconds": round(ovh_duration, 2),
@@ -445,7 +480,7 @@ async def check_domains(
     # Human-readable summary with domain names
     summary_parts = [f"✓ Checked {total} domain(s) in {duration:.2f}s\n"]
 
-    if verify_available and available_domains:
+    if verify_available and (available_domains or aftermarket_domains):
         summary_parts.append(f"OVH verification completed in {ovh_duration:.2f}s\n")
 
     if available_domains:
@@ -462,6 +497,15 @@ async def check_domains(
                     summary_parts.append(f"  ⚠️  {domain} (DNS-based, may be false positive)")
                 else:
                     summary_parts.append(f"  • {domain}")
+        summary_parts.append("")
+
+    if aftermarket_domains:
+        summary_parts.append(f"💰 AFTERMARKET - Secondary Market ({len(aftermarket_domains)}):")
+        for domain in aftermarket_domains:
+            ovh_result = ovh_verification.get(domain, {})
+            aftermarket_type = ovh_result.get("ovh_aftermarket_type", "aftermarket")
+            price = ovh_result.get("ovh_price", "N/A")
+            summary_parts.append(f"  💰 {domain} ({aftermarket_type}) - {price}")
         summary_parts.append("")
 
     if false_positives:
