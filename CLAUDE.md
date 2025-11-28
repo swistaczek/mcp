@@ -350,19 +350,54 @@ Can be used together with Tablica MCP server for complete workflow:
 1. Use `recognize_plates` to analyze photo and identify violating vehicle
 2. Use `submit_complaint` from Tablica MCP to report the violation
 
-### Gemini Alt Tag Generator Architecture
-Generates accessible alt text for images and GIFs using Gemini LLM.
+### Image Descriptions Architecture
+Generates accessible descriptions for images and GIFs using Gemini LLM.
 
 **Key Features:**
+- **Two description types**: Concise alt text vs detailed accessible descriptions
 - Adaptive image resizing (text-heavy detection)
 - GIF support via FFmpeg conversion to MP4 + Gemini File API
 - Batch processing with configurable sizes
 - Context-aware descriptions
 
 **Tool:**
-`generate_alt_tags(images, context?, batch_size?, model?)` - Generate alt text
+`generate_image_descriptions(images, type?, context?, batch_size?, model?)` - Generate descriptions
 - `images: list[str]` - Image/GIF paths (1-20)
-- GIFs converted to MP4 via FFmpeg, uploaded to Gemini File API
+- `type: str = "alt"` - Description type:
+  - `"alt"`: Concise alt text (50-125 chars) - suitable for HTML alt attributes
+  - `"description"`: Detailed descriptions (150-300 chars) - optimized for screen readers and assistive technology
+- `context: str?` - Document context for more relevant descriptions
+- `batch_size: int = 5` - Images per Gemini request (1-10)
+- `model: str?` - Gemini model override (default: gemini-flash-latest)
+
+**Description Types:**
+- **"alt" (default)**: Concise, focused descriptions for HTML alt attributes
+- **"description"**: Detailed descriptions for visually impaired users, includes:
+  - Spatial layout (left, right, foreground, background)
+  - Colors, textures, and visual details
+  - Visible text in images
+  - Actions, expressions, and positioning
+  - Mood, context, and purpose
+
+**Output Structure:**
+```json
+{
+  "descriptions": {
+    "image1.png": "Generated description text"
+  },
+  "stats": {
+    "total_images": 1,
+    "successful": 1,
+    "failed": 0,
+    "duration_seconds": 2.5
+  },
+  "metadata": {
+    "model": "gemini-flash-latest",
+    "description_type": "alt",
+    "context_provided": false
+  }
+}
+```
 
 **Dependencies:**
 - `google-generativeai`, `google-genai`, `Pillow`
@@ -388,9 +423,11 @@ Tests are organized by functionality:
 - `TestImageFormats` - PNG, JPEG, grayscale handling
 - Integration tests marked with `@pytest.mark.skip` (require HTTP mocking)
 
-**Gemini Alt Tag Tests** (`tests/test_gemini_alt.py`):
+**Gemini Image Description Tests** (`tests/test_gemini_alt.py`):
 - `TestImageOptimization` - Adaptive image resizing
 - `TestContextLoading` - Document context handling
+- `TestPromptGeneration` - Prompt creation for alt/description modes
+- `TestGenerateImageDescriptionsTool` - Main tool functionality
 - `TestGifSupport` - GIF detection (magic bytes, extension)
 - `TestGifConversion` - FFmpeg GIF→MP4 conversion
 - `TestGifUploadAndGeneration` - Mocked Gemini File API

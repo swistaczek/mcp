@@ -1,5 +1,5 @@
 """
-Tests for the Gemini Alt Tag Generator MCP server.
+Tests for the Gemini Image Description Generator MCP server.
 """
 
 import base64
@@ -27,7 +27,7 @@ if not os.getenv("GEMINI_API_KEY"):
         allow_module_level=True
     )
 
-import gemini_alt
+import gemini_image_descriptions as gemini_alt
 
 
 class TestImageOptimization:
@@ -235,12 +235,21 @@ class TestPromptGeneration:
     """Test prompt generation for Gemini."""
 
     def test_create_alt_generation_prompt_basic(self):
-        """Test basic prompt generation."""
+        """Test basic prompt generation (alt mode - default)."""
         prompt = gemini_alt.create_alt_generation_prompt()
 
         assert "expert at creating accessible alt text" in prompt
         assert "Concise but descriptive" in prompt
         assert "50-125 characters" in prompt
+
+    def test_create_alt_generation_prompt_description_mode(self):
+        """Test prompt generation for detailed description mode."""
+        prompt = gemini_alt.create_alt_generation_prompt(description_type="description")
+
+        assert "visually impaired users" in prompt
+        assert "screen readers" in prompt
+        assert "150-300 characters" in prompt
+        assert "spatial layout" in prompt
 
     def test_create_alt_generation_prompt_with_context(self):
         """Test prompt generation with document context."""
@@ -257,12 +266,21 @@ class TestPromptGeneration:
         assert "JSON format" in prompt
         assert "image_1" in prompt
 
+    def test_create_gif_description_prompt_description_mode(self):
+        """Test GIF description prompt for detailed mode."""
+        prompt = gemini_alt.create_gif_description_prompt(description_type="description")
+
+        assert "visually impaired users" in prompt
+        assert "screen readers" in prompt
+        assert "150-300 characters" in prompt
+        assert "sequence of actions" in prompt
+
 
 class TestGeminiIntegration:
     """Test Gemini API integration."""
 
     @pytest.mark.asyncio
-    @patch('gemini_alt.genai.GenerativeModel')
+    @patch('gemini_image_descriptions.genai.GenerativeModel')
     async def test_generate_alt_for_batch_success(self, mock_model_class):
         """Test successful batch alt tag generation."""
         # Mock model instance
@@ -289,7 +307,7 @@ class TestGeminiIntegration:
         mock_model.generate_content.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch('gemini_alt.genai.GenerativeModel')
+    @patch('gemini_image_descriptions.genai.GenerativeModel')
     async def test_generate_alt_for_batch_json_error(self, mock_model_class):
         """Test handling of JSON parsing errors."""
         # Mock model instance
@@ -312,14 +330,14 @@ class TestGeminiIntegration:
         ctx.warning.assert_called_with("Failed to parse batch response as JSON, using fallback parsing")
 
 
-class TestGenerateAltTagsTool:
-    """Test the main generate_alt_tags tool."""
+class TestGenerateImageDescriptionsTool:
+    """Test the main generate_image_descriptions tool."""
 
     @pytest.mark.asyncio
-    @patch('gemini_alt.genai.GenerativeModel')
-    @patch('gemini_alt.load_image')
-    async def test_generate_alt_tags_single_image(self, mock_load_image, mock_model_class):
-        """Test generating alt tag for a single image."""
+    @patch('gemini_image_descriptions.genai.GenerativeModel')
+    @patch('gemini_image_descriptions.load_image')
+    async def test_generate_descriptions_single_image(self, mock_load_image, mock_model_class):
+        """Test generating description for a single image."""
         # Mock image loading
         mock_load_image.return_value = (b"fake_image_data", "image/jpeg")
 
@@ -334,8 +352,9 @@ class TestGenerateAltTagsTool:
         ctx = AsyncMock()
 
         # Call the tool (access underlying function via .fn)
-        result = await gemini_alt.generate_alt_tags.fn(
+        result = await gemini_alt.generate_image_descriptions.fn(
             images=["test.png"],
+            type="alt",
             context=None,
             batch_size=5,
             model=None,  # Use default model
@@ -344,15 +363,48 @@ class TestGenerateAltTagsTool:
 
         # Check result
         assert result.content[0].type == "text"
-        assert "Generated alt tags for 1/1 image(s)" in result.content[0].text
-        assert result.structured_content["alt_tags"]["test.png"] == "Facebook Pixel setup dialog"
+        assert "Generated alt text for 1/1 image(s)" in result.content[0].text
+        assert result.structured_content["descriptions"]["test.png"] == "Facebook Pixel setup dialog"
         assert result.structured_content["stats"]["successful"] == 1
+        assert result.structured_content["metadata"]["description_type"] == "alt"
 
     @pytest.mark.asyncio
-    @patch('gemini_alt.genai.GenerativeModel')
-    @patch('gemini_alt.load_image')
-    async def test_generate_alt_tags_multiple_images(self, mock_load_image, mock_model_class):
-        """Test generating alt tags for multiple images."""
+    @patch('gemini_image_descriptions.genai.GenerativeModel')
+    @patch('gemini_image_descriptions.load_image')
+    async def test_generate_descriptions_description_type(self, mock_load_image, mock_model_class):
+        """Test generating detailed descriptions for accessibility."""
+        # Mock image loading
+        mock_load_image.return_value = (b"fake_image_data", "image/jpeg")
+
+        # Mock model instance
+        mock_model = MagicMock()
+        mock_response = MagicMock()
+        mock_response.text = "A detailed dialog showing Facebook Pixel setup with blue buttons on the right side"
+        mock_model.generate_content.return_value = mock_response
+        mock_model_class.return_value = mock_model
+
+        # Mock context
+        ctx = AsyncMock()
+
+        # Call the tool with type="description"
+        result = await gemini_alt.generate_image_descriptions.fn(
+            images=["test.png"],
+            type="description",
+            context=None,
+            batch_size=5,
+            model=None,
+            ctx=ctx
+        )
+
+        # Check result
+        assert "Generated detailed descriptions for 1/1 image(s)" in result.content[0].text
+        assert result.structured_content["metadata"]["description_type"] == "description"
+
+    @pytest.mark.asyncio
+    @patch('gemini_image_descriptions.genai.GenerativeModel')
+    @patch('gemini_image_descriptions.load_image')
+    async def test_generate_descriptions_multiple_images(self, mock_load_image, mock_model_class):
+        """Test generating descriptions for multiple images."""
         # Mock image loading
         mock_load_image.side_effect = [
             (b"image1", "image/jpeg"),
@@ -371,8 +423,9 @@ class TestGenerateAltTagsTool:
         ctx = AsyncMock()
 
         # Call the tool (access underlying function via .fn)
-        result = await gemini_alt.generate_alt_tags.fn(
+        result = await gemini_alt.generate_image_descriptions.fn(
             images=["1.png", "2.png", "3.png"],
+            type="alt",
             context="Test document context",
             batch_size=5,
             model=None,  # Use default model
@@ -381,15 +434,15 @@ class TestGenerateAltTagsTool:
 
         # Check result
         assert result.structured_content["stats"]["successful"] == 3
-        assert result.structured_content["alt_tags"]["1.png"] == "First image"
-        assert result.structured_content["alt_tags"]["2.png"] == "Second image"
-        assert result.structured_content["alt_tags"]["3.png"] == "Third image"
+        assert result.structured_content["descriptions"]["1.png"] == "First image"
+        assert result.structured_content["descriptions"]["2.png"] == "Second image"
+        assert result.structured_content["descriptions"]["3.png"] == "Third image"
 
     @pytest.mark.asyncio
-    @patch('gemini_alt.genai.GenerativeModel')
-    @patch('gemini_alt.load_image')
-    async def test_generate_alt_tags_with_context_file(self, mock_load_image, mock_model_class, tmp_path):
-        """Test generating alt tags with context loaded from a file."""
+    @patch('gemini_image_descriptions.genai.GenerativeModel')
+    @patch('gemini_image_descriptions.load_image')
+    async def test_generate_descriptions_with_context_file(self, mock_load_image, mock_model_class, tmp_path):
+        """Test generating descriptions with context loaded from a file."""
         # Create a context file
         context_file = tmp_path / "context.md"
         context_content = "# Product Documentation\n\nThis image shows our main product interface."
@@ -409,8 +462,9 @@ class TestGenerateAltTagsTool:
         ctx = AsyncMock()
 
         # Call the tool with file path as context
-        result = await gemini_alt.generate_alt_tags.fn(
+        result = await gemini_alt.generate_image_descriptions.fn(
             images=["test.png"],
+            type="alt",
             context=str(context_file),  # Pass file path instead of content
             batch_size=5,
             model=None,  # Use default model
@@ -421,12 +475,12 @@ class TestGenerateAltTagsTool:
         ctx.debug.assert_any_call(f"Loaded context from file: context.md ({len(context_content)} characters)")
 
         # Check result
-        assert result.structured_content["alt_tags"]["test.png"] == "Product interface screenshot"
+        assert result.structured_content["descriptions"]["test.png"] == "Product interface screenshot"
         assert result.structured_content["metadata"]["context_provided"] is True
 
     @pytest.mark.asyncio
-    @patch('gemini_alt.load_image')
-    async def test_generate_alt_tags_with_failed_images(self, mock_load_image):
+    @patch('gemini_image_descriptions.load_image')
+    async def test_generate_descriptions_with_failed_images(self, mock_load_image):
         """Test handling of failed image loading."""
         # Mock image loading to fail
         mock_load_image.side_effect = Exception("Failed to load")
@@ -435,8 +489,9 @@ class TestGenerateAltTagsTool:
         ctx = AsyncMock()
 
         # Call the tool (access underlying function via .fn)
-        result = await gemini_alt.generate_alt_tags.fn(
+        result = await gemini_alt.generate_image_descriptions.fn(
             images=["bad_image.png"],
+            type="alt",
             context=None,
             batch_size=5,
             model=None,  # Use default model
@@ -446,6 +501,25 @@ class TestGenerateAltTagsTool:
         # Check result
         assert "Failed to load any images" in result.content[0].text
         assert result.structured_content["error"] == "No images could be processed"
+
+    @pytest.mark.asyncio
+    async def test_generate_descriptions_invalid_type(self):
+        """Test error handling for invalid type parameter."""
+        ctx = AsyncMock()
+
+        # Call the tool with invalid type
+        result = await gemini_alt.generate_image_descriptions.fn(
+            images=["test.png"],
+            type="invalid",
+            context=None,
+            batch_size=5,
+            model=None,
+            ctx=ctx
+        )
+
+        # Check error result
+        assert "Invalid type 'invalid'" in result.content[0].text
+        assert "error" in result.structured_content
 
 
 class TestGifSupport:
@@ -642,9 +716,10 @@ class TestGifIntegration:
         if not gif_path.exists():
             pytest.skip("example.gif fixture not found")
 
-        # Generate alt tag for the GIF
-        result = await gemini_alt.generate_alt_tags.fn(
+        # Generate alt text for the GIF
+        result = await gemini_alt.generate_image_descriptions.fn(
             images=[str(gif_path)],
+            type="alt",
             context=None,
             batch_size=5,
             model=None,
@@ -655,11 +730,48 @@ class TestGifIntegration:
         assert result.structured_content["stats"]["successful"] == 1
         assert result.structured_content["stats"]["gifs"] == 1
 
-        alt_text = result.structured_content["alt_tags"][str(gif_path)]
+        alt_text = result.structured_content["descriptions"][str(gif_path)]
         assert len(alt_text) > 0
         assert len(alt_text) <= 200
 
         print(f"\nGenerated GIF alt text: {alt_text}")
+
+    @pytest.mark.asyncio
+    @pytest.mark.skipif(
+        not gemini_alt.check_ffmpeg_available(),
+        reason="FFmpeg not installed"
+    )
+    @pytest.mark.skipif(
+        os.getenv("GEMINI_API_KEY", "test-api-key") == "test-api-key",
+        reason="Real Gemini API key required for integration test"
+    )
+    async def test_full_gif_pipeline_description_type(self):
+        """End-to-end test of GIF with detailed description mode."""
+        ctx = AsyncMock()
+        fixtures_path = Path(__file__).parent / "fixtures"
+        gif_path = fixtures_path / "example.gif"
+
+        if not gif_path.exists():
+            pytest.skip("example.gif fixture not found")
+
+        # Generate detailed description for the GIF
+        result = await gemini_alt.generate_image_descriptions.fn(
+            images=[str(gif_path)],
+            type="description",
+            context=None,
+            batch_size=5,
+            model=None,
+            ctx=ctx
+        )
+
+        # Check results
+        assert result.structured_content["stats"]["successful"] == 1
+        assert result.structured_content["metadata"]["description_type"] == "description"
+
+        description = result.structured_content["descriptions"][str(gif_path)]
+        assert len(description) > 0
+
+        print(f"\nGenerated GIF detailed description: {description}")
 
 
 @pytest.mark.integration
@@ -671,7 +783,7 @@ class TestIntegrationWithFixtures:
         os.getenv("GEMINI_API_KEY", "test-api-key") == "test-api-key",
         reason="Real Gemini API key required for integration test"
     )
-    async def test_generate_alt_tag_for_fixture_image(self):
+    async def test_generate_description_for_fixture_image(self):
         """Test with actual fixture image and markdown context."""
         # Read the markdown context
         fixtures_path = Path(__file__).parent / "fixtures"
@@ -681,9 +793,10 @@ class TestIntegrationWithFixtures:
         # Mock context
         ctx = AsyncMock()
 
-        # Generate alt tag for the fixture image (access underlying function via .fn)
-        result = await gemini_alt.generate_alt_tags.fn(
+        # Generate description for the fixture image (access underlying function via .fn)
+        result = await gemini_alt.generate_image_descriptions.fn(
             images=[str(fixtures_path / "1.png")],
+            type="alt",
             context=context,
             batch_size=5,
             model=None,  # Use default model
@@ -692,7 +805,7 @@ class TestIntegrationWithFixtures:
 
         # Check that we got a meaningful result
         assert result.structured_content["stats"]["successful"] == 1
-        alt_text = result.structured_content["alt_tags"][str(fixtures_path / "1.png")]
+        alt_text = result.structured_content["descriptions"][str(fixtures_path / "1.png")]
 
         # The alt text should be relevant to Facebook/Meta Pixel setup
         assert len(alt_text) > 0

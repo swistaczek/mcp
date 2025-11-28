@@ -1,10 +1,5 @@
 """
-FastMCP Gemini Alt Tag Generator Server
-
-Generates meaningful alt tags for images and GIFs using Google's Gemini LLM.
-Supports batch processing and automatic image optimization for token efficiency.
-
-GIF support requires FFmpeg to be installed on the system.
+Gemini Image Description Generator - generates alt text and accessible descriptions for images/GIFs.
 """
 
 import asyncio
@@ -28,7 +23,7 @@ from PIL import Image
 from pydantic import Field
 
 
-mcp = FastMCP("Gemini Alt Tag Generator")
+mcp = FastMCP("Image Descriptions")
 
 # Configure Gemini API
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -186,17 +181,35 @@ async def upload_video_to_gemini(
     return video_file
 
 
-def create_gif_description_prompt(context: Optional[str] = None) -> str:
+def create_gif_description_prompt(
+    context: Optional[str] = None,
+    description_type: str = "alt"
+) -> str:
     """
     Create a prompt for generating alt text for GIF/animation content.
 
     Args:
         context: Optional document context
+        description_type: "alt" for concise (50-125 chars), "description" for detailed
 
     Returns:
         Prompt string for Gemini
     """
-    base_prompt = """You are an expert at creating accessible alt text for animations and GIFs.
+    if description_type == "description":
+        base_prompt = """You are an expert at creating detailed animation descriptions for visually impaired users.
+Your descriptions will be read aloud by screen readers and assistive technology.
+
+Your descriptions should:
+1. Be detailed and comprehensive (150-300 characters)
+2. Describe the sequence of actions and movements step by step
+3. Mention timing and pacing (fast, slow, smooth, abrupt)
+4. Include visual details like colors, UI elements, and text shown
+5. Describe any buttons, menus, or interface elements that appear
+6. Explain the purpose or outcome of the demonstrated action
+7. Be written in clear, natural language as if describing to a friend who cannot see
+"""
+    else:
+        base_prompt = """You are an expert at creating accessible alt text for animations and GIFs.
 Your alt text should be:
 1. Concise but descriptive (typically 50-125 characters)
 2. Focus on the action or motion being shown
@@ -226,7 +239,8 @@ async def generate_description_for_gif(
     video_file: Any,
     context: Optional[str],
     model_name: str,
-    ctx: Context
+    ctx: Context,
+    description_type: str = "alt"
 ) -> str:
     """
     Generate a description for a GIF (uploaded as video) using Gemini.
@@ -236,12 +250,13 @@ async def generate_description_for_gif(
         context: Optional document context
         model_name: Gemini model to use
         ctx: FastMCP context
+        description_type: "alt" for concise, "description" for detailed
 
     Returns:
         Generated alt text for the GIF
     """
     client = genai_new.Client(api_key=GEMINI_API_KEY)
-    prompt = create_gif_description_prompt(context)
+    prompt = create_gif_description_prompt(context, description_type)
 
     await ctx.debug(f"Generating description for GIF using {model_name}")
 
@@ -412,12 +427,32 @@ async def load_context(context_input: Optional[str], ctx: Context) -> Optional[s
 
 def create_alt_generation_prompt(
     context: Optional[str] = None,
-    is_batch: bool = False
+    is_batch: bool = False,
+    description_type: str = "alt"
 ) -> str:
     """
     Create a prompt for generating alt tags based on context and mode.
+
+    Args:
+        context: Optional document context
+        is_batch: Whether to generate batch JSON format
+        description_type: "alt" for concise (50-125 chars), "description" for detailed
     """
-    base_prompt = """You are an expert at creating accessible alt text for images.
+    if description_type == "description":
+        base_prompt = """You are an expert at creating detailed image descriptions for visually impaired users.
+Your descriptions will be read aloud by screen readers and assistive technology.
+
+Your descriptions should:
+1. Be detailed and comprehensive (150-300 characters)
+2. Describe spatial layout (left, right, foreground, background)
+3. Include colors, textures, and visual details
+4. Mention any text visible in the image
+5. Describe people's actions, expressions, and positioning
+6. Convey the mood, context, and purpose of the image
+7. Be written in clear, natural language as if describing to a friend who cannot see
+"""
+    else:
+        base_prompt = """You are an expert at creating accessible alt text for images.
 Your alt text should be:
 1. Concise but descriptive (typically 50-125 characters)
 2. Relevant to the surrounding context when provided
@@ -458,7 +493,8 @@ async def generate_alt_for_batch(
     images: list[tuple[bytes, str]],
     context: Optional[str],
     model_name: str,
-    ctx: Context
+    ctx: Context,
+    description_type: str = "alt"
 ) -> dict[str, str]:
     """
     Generate alt tags for a batch of images using Gemini.
@@ -468,11 +504,12 @@ async def generate_alt_for_batch(
         context: Optional document context
         model_name: Gemini model to use
         ctx: FastMCP context
+        description_type: "alt" for concise, "description" for detailed
 
     Returns:
         Dictionary mapping image indices to alt text
     """
-    prompt = create_alt_generation_prompt(context, is_batch=True)
+    prompt = create_alt_generation_prompt(context, is_batch=True, description_type=description_type)
 
     # Prepare content for Gemini
     contents = [prompt]
@@ -521,18 +558,22 @@ async def generate_alt_for_batch(
 
 
 @mcp.tool(
-    name="generate_alt_tags",
-    description="Generate meaningful alt tags for images and GIFs using Gemini LLM",
+    name="generate_image_descriptions",
+    description="Generate meaningful descriptions for images and GIFs using Gemini LLM",
 )
-async def generate_alt_tags(
+async def generate_image_descriptions(
     images: list[str] = Field(
         min_length=1,
         max_length=20,
         description="List of image/GIF paths, URLs, or base64 data URLs (1-20 items). GIFs require FFmpeg."
     ),
+    type: str = Field(
+        default="alt",
+        description="Description type: 'alt' for concise alt text (50-125 chars), 'description' for detailed accessible descriptions optimized for screen readers (150-300 chars)"
+    ),
     context: Optional[str] = Field(
         default=None,
-        description="HTML/Markdown document context or path to context file for more relevant alt text"
+        description="HTML/Markdown document context or path to context file for more relevant descriptions"
     ),
     batch_size: int = Field(
         default=5,
@@ -547,7 +588,11 @@ async def generate_alt_tags(
     ctx: Context = None,
 ) -> ToolResult:
     """
-    Generate accessible alt tags for images and GIFs using Google's Gemini LLM.
+    Generate accessible descriptions for images and GIFs using Google's Gemini LLM.
+
+    Supports two description types:
+    - "alt": Concise alt text (50-125 chars) - suitable for HTML alt attributes
+    - "description": Detailed descriptions (150-300 chars) - optimized for screen readers
 
     Automatically optimizes large images to reduce token usage while maintaining
     readability. Supports batch processing for multiple images with contextual
@@ -561,8 +606,17 @@ async def generate_alt_tags(
     total = len(images)
     start_time = datetime.now(timezone.utc)
     model_name = model or DEFAULT_MODEL
+    description_type = type  # Alias to avoid shadowing builtin
 
-    await ctx.info(f"Starting alt tag generation for {total} image(s) using model: {model_name}")
+    # Validate description type
+    if description_type not in ("alt", "description"):
+        return ToolResult(
+            content=[{"type": "text", "text": f"Invalid type '{description_type}'. Must be 'alt' or 'description'."}],
+            structured_content={"error": f"Invalid type: {description_type}"}
+        )
+
+    type_label = "alt text" if description_type == "alt" else "detailed descriptions"
+    await ctx.info(f"Starting {type_label} generation for {total} image(s) using model: {model_name}")
 
     # Load context from file if needed
     loaded_context = await load_context(context, ctx)
@@ -597,9 +651,9 @@ async def generate_alt_tags(
             structured_content={"error": "No images could be processed"}
         )
 
-    # Generate alt tags in batches
+    # Generate descriptions in batches
     if processed_images:
-        await ctx.info(f"Generating alt tags for {len(processed_images)} image(s)")
+        await ctx.info(f"Generating {type_label} for {len(processed_images)} image(s)")
     all_alt_texts = {}
 
     for batch_start in range(0, len(processed_images), batch_size):
@@ -609,7 +663,7 @@ async def generate_alt_tags(
         await ctx.report_progress(
             batch_start + len(all_alt_texts),
             total,
-            f"Generating alt tags (batch {batch_start//batch_size + 1})"
+            f"Generating descriptions (batch {batch_start//batch_size + 1})"
         )
 
         # Extract image data for the batch
@@ -618,7 +672,7 @@ async def generate_alt_tags(
         try:
             if len(batch_images) == 1:
                 # Single image mode
-                prompt = create_alt_generation_prompt(loaded_context, is_batch=False)
+                prompt = create_alt_generation_prompt(loaded_context, is_batch=False, description_type=description_type)
                 image_bytes, mime_type = batch_images[0]
 
                 # Create model instance for single image
@@ -648,7 +702,8 @@ async def generate_alt_tags(
                     batch_images,
                     loaded_context,
                     model_name,
-                    ctx
+                    ctx,
+                    description_type
                 )
 
                 # Map results back to original inputs
@@ -660,7 +715,7 @@ async def generate_alt_tags(
                         all_alt_texts[original_input] = "Alt text generation failed"
 
         except Exception as e:
-            await ctx.error(f"Failed to generate alt tags for batch: {str(e)}")
+            await ctx.error(f"Failed to generate descriptions for batch: {str(e)}")
             for idx, original_input, _ in batch:
                 all_alt_texts[original_input] = f"Error: {str(e)}"
 
@@ -690,7 +745,8 @@ async def generate_alt_tags(
                     video_file,
                     loaded_context,
                     model_name,
-                    ctx
+                    ctx,
+                    description_type
                 )
                 all_alt_texts[original_input] = alt_text
 
@@ -712,7 +768,7 @@ async def generate_alt_tags(
             all_alt_texts[original_input] = f"Failed to load: {error}"
 
     duration = (datetime.now(timezone.utc) - start_time).total_seconds()
-    await ctx.report_progress(total, total, "Alt tag generation complete")
+    await ctx.report_progress(total, total, "Description generation complete")
 
     # Prepare structured response
     successful_count = len([v for v in all_alt_texts.values() if not v.startswith("Failed") and not v.startswith("Error")])
@@ -727,7 +783,7 @@ async def generate_alt_tags(
 
     # Create human-readable summary
     summary_lines = [
-        f"✓ Generated alt tags for {stats['successful']}/{total} image(s) in {duration:.2f}s",
+        f"✓ Generated {type_label} for {stats['successful']}/{total} image(s) in {duration:.2f}s",
         "",
         "Results:"
     ]
@@ -743,13 +799,14 @@ async def generate_alt_tags(
     return ToolResult(
         content=[{"type": "text", "text": summary}],
         structured_content={
-            "alt_tags": all_alt_texts,
+            "descriptions": all_alt_texts,
             "stats": stats,
             "metadata": {
                 "generated_at": start_time.isoformat(),
                 "model": model_name,
                 "context_provided": loaded_context is not None,
-                "batch_size": batch_size
+                "batch_size": batch_size,
+                "description_type": description_type
             }
         }
     )

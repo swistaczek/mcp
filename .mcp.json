@@ -18,12 +18,12 @@
       "args": ["-c", "uv run --with fastmcp fastmcp run domains.fastmcp.json"],
       "env": {}
     },
-    "Gemini Alt Tag": {
+    "Image Descriptions": {
       "type": "stdio",
       "command": "sh",
       "args": [
         "-c",
-        "uv run --with fastmcp fastmcp run gemini_alt.fastmcp.json"
+        "uv run --with fastmcp fastmcp run gemini_image_descriptions.fastmcp.json"
       ],
       "env": {
         "GEMINI_API_KEY": "${GEMINI_API_KEY}"
@@ -35,7 +35,7 @@
       "args": ["-c", "uv run --with fastmcp fastmcp run tablica.fastmcp.json"],
       "env": {}
     },
-    "EXIF Metadata Extractor": {
+    "EXIF Extractor": {
       "type": "stdio",
       "command": "sh",
       "args": [
