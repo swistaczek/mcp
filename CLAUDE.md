@@ -355,6 +355,7 @@ Generates accessible descriptions for images and GIFs using Gemini LLM.
 
 **Key Features:**
 - **Two description types**: Concise alt text vs detailed accessible descriptions
+- **SHA256 checksums**: Raw input file checksums for client-side caching
 - Adaptive image resizing (text-heavy detection)
 - GIF support via FFmpeg conversion to MP4 + Gemini File API
 - Batch processing with configurable sizes
@@ -388,6 +389,9 @@ Generates accessible descriptions for images and GIFs using Gemini LLM.
   "descriptions": {
     "image1.png": "Generated description text"
   },
+  "checksums": {
+    "image1.png": "sha256_hex_string_64_chars"
+  },
   "stats": {
     "total_images": 1,
     "successful": 1,
@@ -397,7 +401,8 @@ Generates accessible descriptions for images and GIFs using Gemini LLM.
   "metadata": {
     "model": "gemini-flash-latest",
     "description_type": "alt",
-    "context_provided": false
+    "context_provided": false,
+    "checksum_algorithm": "sha256"
   }
 }
 ```

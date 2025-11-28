@@ -4,6 +4,7 @@ Gemini Image Description Generator - generates alt text and accessible descripti
 
 import asyncio
 import base64
+import hashlib
 import io
 import os
 import shutil
@@ -59,6 +60,20 @@ def is_gif_file(file_path: Path) -> bool:
         return header in (b'GIF87a', b'GIF89a')
     except (OSError, IOError):
         return False
+
+
+def compute_file_checksum(file_path: Path) -> str:
+    """
+    Compute SHA256 checksum of a file.
+
+    Args:
+        file_path: Path to the file
+
+    Returns:
+        Hex-encoded SHA256 hash string
+    """
+    with open(file_path, 'rb') as f:
+        return hashlib.sha256(f.read()).hexdigest()
 
 
 def check_ffmpeg_available() -> bool:
@@ -364,7 +379,7 @@ def optimize_image(
     return output.getvalue(), 'image/jpeg'
 
 
-async def load_image(image_input: str, ctx: Context) -> tuple[bytes, str]:
+async def load_image(image_input: str, ctx: Context) -> tuple[bytes, str, str]:
     """
     Load image from file path, URL, or base64 string.
 
@@ -373,29 +388,38 @@ async def load_image(image_input: str, ctx: Context) -> tuple[bytes, str]:
         ctx: FastMCP context for logging
 
     Returns:
-        Tuple of (image_bytes, mime_type)
+        Tuple of (optimized_image_bytes, mime_type, sha256_checksum)
+        The checksum is computed from raw input bytes before optimization.
     """
     # Check if it's a data URL
     if image_input.startswith('data:'):
         # Parse data URL
         header, data = image_input.split(',', 1)
         mime_type = header.split(':')[1].split(';')[0]
-        image_bytes = base64.b64decode(data)
+        raw_bytes = base64.b64decode(data)
+
+        # Compute checksum from raw bytes before optimization
+        checksum = hashlib.sha256(raw_bytes).hexdigest()
 
         # Optimize the image
-        image = Image.open(io.BytesIO(image_bytes))
+        image = Image.open(io.BytesIO(raw_bytes))
         await ctx.debug(f"Loaded image from data URL: {image.size}")
-        return optimize_image(image)
+        optimized_bytes, opt_mime = optimize_image(image)
+        return optimized_bytes, opt_mime, checksum
 
     # Check if it's a file path
     path = Path(image_input)
     if path.exists() and path.is_file():
         with open(path, 'rb') as f:
-            image_bytes = f.read()
+            raw_bytes = f.read()
 
-        image = Image.open(io.BytesIO(image_bytes))
+        # Compute checksum from raw bytes before optimization
+        checksum = hashlib.sha256(raw_bytes).hexdigest()
+
+        image = Image.open(io.BytesIO(raw_bytes))
         await ctx.debug(f"Loaded image from file: {path.name}, size: {image.size}")
-        return optimize_image(image)
+        optimized_bytes, opt_mime = optimize_image(image)
+        return optimized_bytes, opt_mime, checksum
 
     # Check if it's a URL
     parsed = urlparse(image_input)
@@ -657,6 +681,7 @@ async def generate_image_descriptions(
     processed_images = []
     gif_inputs = []
     failed_images = []
+    all_checksums = {}  # Track SHA256 checksums per input
 
     for i, image_input in enumerate(images):
         try:
@@ -666,11 +691,14 @@ async def generate_image_descriptions(
             path = Path(image_input)
             if path.exists() and path.is_file() and is_gif_file(path):
                 await ctx.info(f"Detected GIF: {path.name}")
-                gif_inputs.append((i, image_input, path))
+                checksum = compute_file_checksum(path)
+                gif_inputs.append((i, image_input, path, checksum))
+                all_checksums[image_input] = checksum
             else:
                 # Regular image processing
-                image_data = await load_image(image_input, ctx)
-                processed_images.append((i, image_input, image_data))
+                image_bytes, mime_type, checksum = await load_image(image_input, ctx)
+                processed_images.append((i, image_input, (image_bytes, mime_type), checksum))
+                all_checksums[image_input] = checksum
         except Exception as e:
             await ctx.warning(f"Failed to load image {i+1}: {str(e)}")
             failed_images.append((i, image_input, str(e)))
@@ -696,8 +724,8 @@ async def generate_image_descriptions(
             f"Generating descriptions (batch {batch_start//batch_size + 1})"
         )
 
-        # Extract image data for the batch
-        batch_images = [(img_data[0], img_data[1]) for _, _, img_data in batch]
+        # Extract image data for the batch (ignore checksum for API call)
+        batch_images = [(img_data[0], img_data[1]) for _, _, img_data, _ in batch]
 
         try:
             if len(batch_images) == 1:
@@ -724,7 +752,7 @@ async def generate_image_descriptions(
                     }
                 )
 
-                idx, original_input, _ = batch[0]
+                idx, original_input, _, _ = batch[0]
                 all_alt_texts[original_input] = response.text.strip()
             else:
                 # Batch mode
@@ -737,7 +765,7 @@ async def generate_image_descriptions(
                 )
 
                 # Map results back to original inputs
-                for i, (idx, original_input, _) in enumerate(batch):
+                for i, (idx, original_input, _, _) in enumerate(batch):
                     key = f"image_{i+1}"
                     if key in alt_texts:
                         all_alt_texts[original_input] = alt_texts[key]
@@ -746,7 +774,7 @@ async def generate_image_descriptions(
 
         except Exception as e:
             await ctx.error(f"Failed to generate descriptions for batch: {str(e)}")
-            for idx, original_input, _ in batch:
+            for idx, original_input, _, _ in batch:
                 all_alt_texts[original_input] = f"Error: {str(e)}"
 
     # Process GIFs (each GIF is processed individually due to video upload requirement)
@@ -754,11 +782,11 @@ async def generate_image_descriptions(
         await ctx.info(f"Processing {len(gif_inputs)} GIF(s) via video pipeline")
         temp_files = []  # Track temp files for cleanup
 
-        for idx, original_input, gif_path in gif_inputs:
+        for gif_idx, (idx, original_input, gif_path, checksum) in enumerate(gif_inputs):
             mp4_path = None
             try:
                 await ctx.report_progress(
-                    len(processed_images) + gif_inputs.index((idx, original_input, gif_path)),
+                    len(processed_images) + gif_idx,
                     total,
                     f"Processing GIF: {gif_path.name}"
                 )
@@ -830,13 +858,15 @@ async def generate_image_descriptions(
         content=[{"type": "text", "text": summary}],
         structured_content={
             "descriptions": all_alt_texts,
+            "checksums": all_checksums,
             "stats": stats,
             "metadata": {
                 "generated_at": start_time.isoformat(),
                 "model": model_name,
                 "context_provided": loaded_context is not None,
                 "batch_size": batch_size,
-                "description_type": description_type
+                "description_type": description_type,
+                "checksum_algorithm": "sha256"
             }
         }
     )

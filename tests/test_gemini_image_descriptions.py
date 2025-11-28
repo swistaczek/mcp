@@ -123,11 +123,13 @@ class TestImageLoading:
         ctx = AsyncMock()
 
         # Load the image
-        image_bytes, mime_type = await gemini_alt.load_image(str(image_path), ctx)
+        image_bytes, mime_type, checksum = await gemini_alt.load_image(str(image_path), ctx)
 
         # Check result
         assert isinstance(image_bytes, bytes)
         assert mime_type == 'image/jpeg'
+        assert isinstance(checksum, str)
+        assert len(checksum) == 64  # SHA256 produces 64 hex chars
         ctx.debug.assert_called()
 
     @pytest.mark.asyncio
@@ -146,11 +148,13 @@ class TestImageLoading:
         ctx = AsyncMock()
 
         # Load the image
-        loaded_bytes, mime_type = await gemini_alt.load_image(data_url, ctx)
+        loaded_bytes, mime_type, checksum = await gemini_alt.load_image(data_url, ctx)
 
         # Check result
         assert isinstance(loaded_bytes, bytes)
         assert mime_type == 'image/jpeg'
+        assert isinstance(checksum, str)
+        assert len(checksum) == 64  # SHA256 produces 64 hex chars
 
     @pytest.mark.asyncio
     async def test_load_image_invalid_input(self):
@@ -348,8 +352,8 @@ class TestGenerateImageDescriptionsTool:
     @patch('gemini_image_descriptions.load_image')
     async def test_generate_descriptions_single_image(self, mock_load_image, mock_model_class):
         """Test generating description for a single image."""
-        # Mock image loading
-        mock_load_image.return_value = (b"fake_image_data", "image/jpeg")
+        # Mock image loading (now returns 3-tuple with checksum)
+        mock_load_image.return_value = (b"fake_image_data", "image/jpeg", "abc123def456")
 
         # Mock model instance
         mock_model = MagicMock()
@@ -375,16 +379,18 @@ class TestGenerateImageDescriptionsTool:
         assert result.content[0].type == "text"
         assert "Generated alt text for 1/1 image(s)" in result.content[0].text
         assert result.structured_content["descriptions"]["test.png"] == "Facebook Pixel setup dialog"
+        assert result.structured_content["checksums"]["test.png"] == "abc123def456"
         assert result.structured_content["stats"]["successful"] == 1
         assert result.structured_content["metadata"]["description_type"] == "alt"
+        assert result.structured_content["metadata"]["checksum_algorithm"] == "sha256"
 
     @pytest.mark.asyncio
     @patch('gemini_image_descriptions.genai.GenerativeModel')
     @patch('gemini_image_descriptions.load_image')
     async def test_generate_descriptions_description_type(self, mock_load_image, mock_model_class):
         """Test generating detailed descriptions for accessibility."""
-        # Mock image loading
-        mock_load_image.return_value = (b"fake_image_data", "image/jpeg")
+        # Mock image loading (now returns 3-tuple with checksum)
+        mock_load_image.return_value = (b"fake_image_data", "image/jpeg", "checksum123")
 
         # Mock model instance
         mock_model = MagicMock()
@@ -415,11 +421,11 @@ class TestGenerateImageDescriptionsTool:
     @patch('gemini_image_descriptions.load_image')
     async def test_generate_descriptions_multiple_images(self, mock_load_image, mock_model_class):
         """Test generating descriptions for multiple images."""
-        # Mock image loading
+        # Mock image loading (now returns 3-tuple with checksum)
         mock_load_image.side_effect = [
-            (b"image1", "image/jpeg"),
-            (b"image2", "image/jpeg"),
-            (b"image3", "image/jpeg")
+            (b"image1", "image/jpeg", "checksum1"),
+            (b"image2", "image/jpeg", "checksum2"),
+            (b"image3", "image/jpeg", "checksum3")
         ]
 
         # Mock model instance
@@ -458,8 +464,8 @@ class TestGenerateImageDescriptionsTool:
         context_content = "# Product Documentation\n\nThis image shows our main product interface."
         context_file.write_text(context_content)
 
-        # Mock image loading
-        mock_load_image.return_value = (b"fake_image_data", "image/jpeg")
+        # Mock image loading (now returns 3-tuple with checksum)
+        mock_load_image.return_value = (b"fake_image_data", "image/jpeg", "ctx_checksum")
 
         # Mock model instance
         mock_model = MagicMock()
@@ -486,6 +492,7 @@ class TestGenerateImageDescriptionsTool:
 
         # Check result
         assert result.structured_content["descriptions"]["test.png"] == "Product interface screenshot"
+        assert result.structured_content["checksums"]["test.png"] == "ctx_checksum"
         assert result.structured_content["metadata"]["context_provided"] is True
 
     @pytest.mark.asyncio
