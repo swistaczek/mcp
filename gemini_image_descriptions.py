@@ -10,7 +10,6 @@ import os
 import shutil
 import subprocess
 import tempfile
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, Union
 from urllib.parse import urlparse
@@ -658,7 +657,6 @@ async def generate_image_descriptions(
     - GIFs are processed individually (not batched with images)
     """
     total = len(images)
-    start_time = datetime.now(timezone.utc)
     model_name = model or DEFAULT_MODEL
     description_type = type  # Alias to avoid shadowing builtin
 
@@ -825,23 +823,15 @@ async def generate_image_descriptions(
         if original_input not in all_alt_texts:  # Don't overwrite existing error messages
             all_alt_texts[original_input] = f"Failed to load: {error}"
 
-    duration = (datetime.now(timezone.utc) - start_time).total_seconds()
     await ctx.report_progress(total, total, "Description generation complete")
 
     # Prepare structured response
     successful_count = len([v for v in all_alt_texts.values() if not v.startswith("Failed") and not v.startswith("Error")])
-    stats = {
-        "total_images": total,
-        "images": len(processed_images),
-        "gifs": len(gif_inputs),
-        "successful": successful_count,
-        "failed": total - successful_count,
-        "duration_seconds": round(duration, 2),
-    }
+    failed_count = total - successful_count
 
     # Create human-readable summary
     summary_lines = [
-        f"✓ Generated {type_label} for {stats['successful']}/{total} image(s) in {duration:.2f}s",
+        f"✓ Generated {type_label} for {successful_count}/{total} image(s)",
         "",
         "Results:"
     ]
@@ -854,19 +844,15 @@ async def generate_image_descriptions(
 
     summary = "\n".join(summary_lines)
 
+    # Build per-image structured response
+    structured = {}
+    for path, description in all_alt_texts.items():
+        structured[path] = {
+            "description": description,
+            "checksum": all_checksums.get(path),
+        }
+
     return ToolResult(
         content=[{"type": "text", "text": summary}],
-        structured_content={
-            "descriptions": all_alt_texts,
-            "checksums": all_checksums,
-            "stats": stats,
-            "metadata": {
-                "generated_at": start_time.isoformat(),
-                "model": model_name,
-                "context_provided": loaded_context is not None,
-                "batch_size": batch_size,
-                "description_type": description_type,
-                "checksum_algorithm": "sha256"
-            }
-        }
+        structured_content=structured
     )

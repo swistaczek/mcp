@@ -378,11 +378,8 @@ class TestGenerateImageDescriptionsTool:
         # Check result
         assert result.content[0].type == "text"
         assert "Generated alt text for 1/1 image(s)" in result.content[0].text
-        assert result.structured_content["descriptions"]["test.png"] == "Facebook Pixel setup dialog"
-        assert result.structured_content["checksums"]["test.png"] == "abc123def456"
-        assert result.structured_content["stats"]["successful"] == 1
-        assert result.structured_content["metadata"]["description_type"] == "alt"
-        assert result.structured_content["metadata"]["checksum_algorithm"] == "sha256"
+        assert result.structured_content["test.png"]["description"] == "Facebook Pixel setup dialog"
+        assert result.structured_content["test.png"]["checksum"] == "abc123def456"
 
     @pytest.mark.asyncio
     @patch('gemini_image_descriptions.genai.GenerativeModel')
@@ -414,7 +411,7 @@ class TestGenerateImageDescriptionsTool:
 
         # Check result
         assert "Generated detailed descriptions for 1/1 image(s)" in result.content[0].text
-        assert result.structured_content["metadata"]["description_type"] == "description"
+        assert "failed" not in result.structured_content
 
     @pytest.mark.asyncio
     @patch('gemini_image_descriptions.genai.GenerativeModel')
@@ -449,10 +446,9 @@ class TestGenerateImageDescriptionsTool:
         )
 
         # Check result
-        assert result.structured_content["stats"]["successful"] == 3
-        assert result.structured_content["descriptions"]["1.png"] == "First image"
-        assert result.structured_content["descriptions"]["2.png"] == "Second image"
-        assert result.structured_content["descriptions"]["3.png"] == "Third image"
+        assert result.structured_content["1.png"]["description"] == "First image"
+        assert result.structured_content["2.png"]["description"] == "Second image"
+        assert result.structured_content["3.png"]["description"] == "Third image"
 
     @pytest.mark.asyncio
     @patch('gemini_image_descriptions.genai.GenerativeModel')
@@ -491,9 +487,8 @@ class TestGenerateImageDescriptionsTool:
         ctx.debug.assert_any_call(f"Loaded context from file: context.md ({len(context_content)} characters)")
 
         # Check result
-        assert result.structured_content["descriptions"]["test.png"] == "Product interface screenshot"
-        assert result.structured_content["checksums"]["test.png"] == "ctx_checksum"
-        assert result.structured_content["metadata"]["context_provided"] is True
+        assert result.structured_content["test.png"]["description"] == "Product interface screenshot"
+        assert result.structured_content["test.png"]["checksum"] == "ctx_checksum"
 
     @pytest.mark.asyncio
     @patch('gemini_image_descriptions.load_image')
@@ -744,10 +739,7 @@ class TestGifIntegration:
         )
 
         # Check results
-        assert result.structured_content["stats"]["successful"] == 1
-        assert result.structured_content["stats"]["gifs"] == 1
-
-        alt_text = result.structured_content["descriptions"][str(gif_path)]
+        alt_text = result.structured_content[str(gif_path)]["description"]
         assert len(alt_text) > 0
         assert len(alt_text) <= 200
 
@@ -782,10 +774,7 @@ class TestGifIntegration:
         )
 
         # Check results
-        assert result.structured_content["stats"]["successful"] == 1
-        assert result.structured_content["metadata"]["description_type"] == "description"
-
-        description = result.structured_content["descriptions"][str(gif_path)]
+        description = result.structured_content[str(gif_path)]["description"]
         assert len(description) > 0
 
         print(f"\nGenerated GIF detailed description: {description}")
@@ -821,8 +810,7 @@ class TestIntegrationWithFixtures:
         )
 
         # Check that we got a meaningful result
-        assert result.structured_content["stats"]["successful"] == 1
-        alt_text = result.structured_content["descriptions"][str(fixtures_path / "1.png")]
+        alt_text = result.structured_content[str(fixtures_path / "1.png")]["description"]
 
         # The alt text should be relevant to Facebook/Meta Pixel setup
         assert len(alt_text) > 0
