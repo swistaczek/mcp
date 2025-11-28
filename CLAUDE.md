@@ -350,6 +350,24 @@ Can be used together with Tablica MCP server for complete workflow:
 1. Use `recognize_plates` to analyze photo and identify violating vehicle
 2. Use `submit_complaint` from Tablica MCP to report the violation
 
+### Gemini Alt Tag Generator Architecture
+Generates accessible alt text for images and GIFs using Gemini LLM.
+
+**Key Features:**
+- Adaptive image resizing (text-heavy detection)
+- GIF support via FFmpeg conversion to MP4 + Gemini File API
+- Batch processing with configurable sizes
+- Context-aware descriptions
+
+**Tool:**
+`generate_alt_tags(images, context?, batch_size?, model?)` - Generate alt text
+- `images: list[str]` - Image/GIF paths (1-20)
+- GIFs converted to MP4 via FFmpeg, uploaded to Gemini File API
+
+**Dependencies:**
+- `google-generativeai`, `google-genai`, `Pillow`
+- FFmpeg (optional, for GIF support): `brew install ffmpeg`
+
 ## Testing Strategy
 
 Tests are organized by functionality:
@@ -373,6 +391,10 @@ Tests are organized by functionality:
 **Gemini Alt Tag Tests** (`tests/test_gemini_alt.py`):
 - `TestImageOptimization` - Adaptive image resizing
 - `TestContextLoading` - Document context handling
+- `TestGifSupport` - GIF detection (magic bytes, extension)
+- `TestGifConversion` - FFmpeg GIF→MP4 conversion
+- `TestGifUploadAndGeneration` - Mocked Gemini File API
+- `TestGifIntegration` - Full GIF pipeline (requires FFmpeg + GEMINI_API_KEY)
 - Integration tests (require GEMINI_API_KEY)
 
 **EXIF Extractor Tests** (`tests/test_exif_extractor.py`):
@@ -394,6 +416,7 @@ Tests are organized by functionality:
 Test fixtures:
 - `tests/fixtures/whois_responses.json` - Sample WHOIS responses
 - `tests/fixtures/*.png` - Test images for alt tag generation
+- `tests/fixtures/example.gif` - Animated GIF for GIF description testing
 - `tests/fixtures/IMG_5134.heic` - iPhone photo with GPS data (Poznań, Poland)
 - `tests/fixtures/IMG_2852.heic` - iPhone photo without GPS data
 

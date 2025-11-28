@@ -448,6 +448,220 @@ class TestGenerateAltTagsTool:
         assert result.structured_content["error"] == "No images could be processed"
 
 
+class TestGifSupport:
+    """Test GIF detection and processing utilities."""
+
+    def test_is_gif_file_valid_gif(self, tmp_path):
+        """Test detection of valid GIF files."""
+        # Create a valid GIF file
+        gif_path = tmp_path / "test.gif"
+        # GIF89a header
+        with open(gif_path, 'wb') as f:
+            f.write(b'GIF89a' + b'\x00' * 100)
+
+        assert gemini_alt.is_gif_file(gif_path) is True
+
+    def test_is_gif_file_gif87a(self, tmp_path):
+        """Test detection of GIF87a format."""
+        gif_path = tmp_path / "test.gif"
+        with open(gif_path, 'wb') as f:
+            f.write(b'GIF87a' + b'\x00' * 100)
+
+        assert gemini_alt.is_gif_file(gif_path) is True
+
+    def test_is_gif_file_wrong_extension(self, tmp_path):
+        """Test that non-GIF extensions are rejected."""
+        png_path = tmp_path / "test.png"
+        with open(png_path, 'wb') as f:
+            f.write(b'GIF89a' + b'\x00' * 100)
+
+        assert gemini_alt.is_gif_file(png_path) is False
+
+    def test_is_gif_file_wrong_magic_bytes(self, tmp_path):
+        """Test that files with wrong magic bytes are rejected."""
+        gif_path = tmp_path / "test.gif"
+        with open(gif_path, 'wb') as f:
+            f.write(b'NOTGIF' + b'\x00' * 100)
+
+        assert gemini_alt.is_gif_file(gif_path) is False
+
+    def test_is_gif_file_nonexistent(self):
+        """Test behavior with non-existent file."""
+        assert gemini_alt.is_gif_file(Path("/nonexistent/file.gif")) is False
+
+    def test_check_ffmpeg_available(self):
+        """Test FFmpeg availability check."""
+        # This should work on systems with FFmpeg installed
+        result = gemini_alt.check_ffmpeg_available()
+        # Just check it returns a boolean
+        assert isinstance(result, bool)
+
+    def test_create_gif_description_prompt_basic(self):
+        """Test GIF description prompt generation."""
+        prompt = gemini_alt.create_gif_description_prompt()
+
+        assert "animations" in prompt.lower() or "gifs" in prompt.lower()
+        assert "motion" in prompt.lower() or "action" in prompt.lower()
+        assert "alt text" in prompt.lower()
+
+    def test_create_gif_description_prompt_with_context(self):
+        """Test GIF description prompt with document context."""
+        context = "This is a tutorial about video editing."
+        prompt = gemini_alt.create_gif_description_prompt(context)
+
+        assert context in prompt
+        assert "animations" in prompt.lower() or "gifs" in prompt.lower()
+
+
+class TestGifConversion:
+    """Test GIF to MP4 conversion with FFmpeg."""
+
+    @pytest.mark.asyncio
+    async def test_convert_gif_to_mp4_ffmpeg_not_available(self):
+        """Test error when FFmpeg is not available."""
+        ctx = AsyncMock()
+
+        with patch.object(gemini_alt, 'check_ffmpeg_available', return_value=False):
+            with pytest.raises(RuntimeError) as exc_info:
+                await gemini_alt.convert_gif_to_mp4(Path("/some/file.gif"), ctx)
+
+            assert "FFmpeg is required" in str(exc_info.value)
+            assert "brew install ffmpeg" in str(exc_info.value)
+
+    @pytest.mark.asyncio
+    @pytest.mark.skipif(
+        not gemini_alt.check_ffmpeg_available(),
+        reason="FFmpeg not installed"
+    )
+    async def test_convert_gif_to_mp4_real_conversion(self):
+        """Test actual GIF to MP4 conversion with FFmpeg."""
+        ctx = AsyncMock()
+        fixtures_path = Path(__file__).parent / "fixtures"
+        gif_path = fixtures_path / "example.gif"
+
+        if not gif_path.exists():
+            pytest.skip("example.gif fixture not found")
+
+        # Convert GIF to MP4
+        mp4_path = await gemini_alt.convert_gif_to_mp4(gif_path, ctx)
+
+        try:
+            # Verify the output exists
+            assert mp4_path.exists()
+            assert mp4_path.suffix == ".mp4"
+
+            # Verify it's smaller than the original (usually true for GIF to MP4)
+            original_size = gif_path.stat().st_size
+            converted_size = mp4_path.stat().st_size
+            assert converted_size > 0
+
+            # Log the conversion ratio
+            print(f"\nConversion: {original_size/1024:.1f}KB -> {converted_size/1024:.1f}KB")
+        finally:
+            # Cleanup
+            mp4_path.unlink(missing_ok=True)
+
+
+class TestGifUploadAndGeneration:
+    """Test Gemini File API integration for GIF processing."""
+
+    @pytest.mark.asyncio
+    async def test_upload_video_to_gemini_mocked(self):
+        """Test video upload with mocked Gemini client."""
+        ctx = AsyncMock()
+
+        # Mock the genai_new.Client
+        mock_file = MagicMock()
+        mock_file.name = "files/test123"
+        mock_file.state.name = "ACTIVE"
+        mock_file.uri = "https://example.com/files/test123"
+
+        mock_client = MagicMock()
+        mock_client.files.upload.return_value = mock_file
+        mock_client.files.get.return_value = mock_file
+
+        with patch.object(gemini_alt, 'genai_new') as mock_genai:
+            mock_genai.Client.return_value = mock_client
+
+            result = await gemini_alt.upload_video_to_gemini(
+                Path("/tmp/test.mp4"),
+                ctx,
+                timeout=10
+            )
+
+            assert result.name == "files/test123"
+            mock_client.files.upload.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_generate_description_for_gif_mocked(self):
+        """Test GIF description generation with mocked Gemini."""
+        ctx = AsyncMock()
+
+        mock_video_file = MagicMock()
+        mock_video_file.uri = "https://example.com/files/test123"
+
+        mock_response = MagicMock()
+        mock_response.text = "A cat jumping over a fence"
+
+        mock_client = MagicMock()
+        mock_client.models.generate_content.return_value = mock_response
+
+        with patch.object(gemini_alt, 'genai_new') as mock_genai:
+            mock_genai.Client.return_value = mock_client
+
+            result = await gemini_alt.generate_description_for_gif(
+                mock_video_file,
+                context=None,
+                model_name="gemini-2.0-flash",
+                ctx=ctx
+            )
+
+            assert result == "A cat jumping over a fence"
+            mock_client.models.generate_content.assert_called_once()
+
+
+@pytest.mark.integration
+class TestGifIntegration:
+    """Integration tests for full GIF processing pipeline."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.skipif(
+        not gemini_alt.check_ffmpeg_available(),
+        reason="FFmpeg not installed"
+    )
+    @pytest.mark.skipif(
+        os.getenv("GEMINI_API_KEY", "test-api-key") == "test-api-key",
+        reason="Real Gemini API key required for integration test"
+    )
+    async def test_full_gif_pipeline(self):
+        """End-to-end test of GIF description generation."""
+        ctx = AsyncMock()
+        fixtures_path = Path(__file__).parent / "fixtures"
+        gif_path = fixtures_path / "example.gif"
+
+        if not gif_path.exists():
+            pytest.skip("example.gif fixture not found")
+
+        # Generate alt tag for the GIF
+        result = await gemini_alt.generate_alt_tags.fn(
+            images=[str(gif_path)],
+            context=None,
+            batch_size=5,
+            model=None,
+            ctx=ctx
+        )
+
+        # Check results
+        assert result.structured_content["stats"]["successful"] == 1
+        assert result.structured_content["stats"]["gifs"] == 1
+
+        alt_text = result.structured_content["alt_tags"][str(gif_path)]
+        assert len(alt_text) > 0
+        assert len(alt_text) <= 200
+
+        print(f"\nGenerated GIF alt text: {alt_text}")
+
+
 @pytest.mark.integration
 class TestIntegrationWithFixtures:
     """Integration tests using actual test fixtures."""

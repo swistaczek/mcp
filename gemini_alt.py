@@ -1,20 +1,27 @@
 """
 FastMCP Gemini Alt Tag Generator Server
 
-Generates meaningful alt tags for images using Google's Gemini LLM.
+Generates meaningful alt tags for images and GIFs using Google's Gemini LLM.
 Supports batch processing and automatic image optimization for token efficiency.
+
+GIF support requires FFmpeg to be installed on the system.
 """
 
 import asyncio
 import base64
 import io
 import os
+import shutil
+import subprocess
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, Union
 from urllib.parse import urlparse
 
 import google.generativeai as genai
+from google import genai as genai_new
+from google.genai import types as genai_types
 from fastmcp import FastMCP, Context
 from fastmcp.tools.tool import ToolResult
 from PIL import Image
@@ -32,6 +39,227 @@ genai.configure(api_key=GEMINI_API_KEY)
 
 # Default model for best performance/cost
 DEFAULT_MODEL = "gemini-flash-latest"
+
+# GIF processing timeout (seconds)
+GIF_PROCESSING_TIMEOUT = 60
+
+
+def is_gif_file(file_path: Path) -> bool:
+    """
+    Check if a file is a GIF by extension and magic bytes.
+
+    Args:
+        file_path: Path to the file
+
+    Returns:
+        True if the file is a GIF
+    """
+    if file_path.suffix.lower() != '.gif':
+        return False
+
+    # Verify magic bytes (GIF87a or GIF89a)
+    try:
+        with open(file_path, 'rb') as f:
+            header = f.read(6)
+        return header in (b'GIF87a', b'GIF89a')
+    except (OSError, IOError):
+        return False
+
+
+def check_ffmpeg_available() -> bool:
+    """Check if FFmpeg is available on the system."""
+    return shutil.which("ffmpeg") is not None
+
+
+async def convert_gif_to_mp4(gif_path: Path, ctx: Context) -> Path:
+    """
+    Convert a GIF to MP4 using FFmpeg for Gemini video processing.
+
+    Args:
+        gif_path: Path to the GIF file
+        ctx: FastMCP context for logging
+
+    Returns:
+        Path to the converted MP4 file (temporary file, caller must clean up)
+
+    Raises:
+        RuntimeError: If FFmpeg is not available or conversion fails
+    """
+    if not check_ffmpeg_available():
+        raise RuntimeError(
+            "FFmpeg is required for GIF processing but was not found. "
+            "Install with: brew install ffmpeg (macOS) or apt install ffmpeg (Linux)"
+        )
+
+    # Create temporary file for output
+    tmp_file = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
+    output_path = Path(tmp_file.name)
+    tmp_file.close()
+
+    # FFmpeg command for GIF to MP4 conversion
+    # -movflags faststart: Optimize for streaming
+    # -pix_fmt yuv420p: H.264 compatible pixel format
+    # -vf scale=...: Ensure even dimensions (required for H.264)
+    cmd = [
+        "ffmpeg",
+        "-i", str(gif_path),
+        "-movflags", "faststart",
+        "-pix_fmt", "yuv420p",
+        "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+        "-y",  # Overwrite output file
+        str(output_path)
+    ]
+
+    await ctx.debug(f"Converting GIF to MP4: {gif_path.name}")
+
+    proc = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await proc.communicate()
+
+    if proc.returncode != 0:
+        output_path.unlink(missing_ok=True)
+        raise RuntimeError(f"FFmpeg conversion failed: {stderr.decode()}")
+
+    original_size = gif_path.stat().st_size / 1024
+    converted_size = output_path.stat().st_size / 1024
+    await ctx.debug(
+        f"GIF converted: {original_size:.1f}KB -> {converted_size:.1f}KB "
+        f"({100 - (converted_size/original_size*100):.0f}% reduction)"
+    )
+
+    return output_path
+
+
+async def upload_video_to_gemini(
+    video_path: Path,
+    ctx: Context,
+    timeout: int = GIF_PROCESSING_TIMEOUT
+) -> Any:
+    """
+    Upload a video to Gemini using the File API.
+
+    Args:
+        video_path: Path to the video file
+        ctx: FastMCP context for logging
+        timeout: Maximum time to wait for processing (seconds)
+
+    Returns:
+        Gemini File object reference for use in generate_content
+
+    Raises:
+        RuntimeError: If upload or processing fails
+    """
+    # Use the new genai client for File API
+    client = genai_new.Client(api_key=GEMINI_API_KEY)
+
+    await ctx.debug(f"Uploading video to Gemini: {video_path.name}")
+
+    # Upload the video
+    video_file = await asyncio.to_thread(
+        client.files.upload,
+        file=str(video_path),
+        config={"display_name": video_path.name}
+    )
+
+    await ctx.debug(f"Upload complete: {video_file.name}, waiting for processing...")
+
+    # Wait for processing with timeout
+    start_time = asyncio.get_event_loop().time()
+    while video_file.state.name == "PROCESSING":
+        elapsed = asyncio.get_event_loop().time() - start_time
+        if elapsed > timeout:
+            raise RuntimeError(
+                f"Video processing timed out after {timeout}s. "
+                "The GIF may be too large or complex."
+            )
+
+        await asyncio.sleep(2)
+        video_file = await asyncio.to_thread(client.files.get, name=video_file.name)
+
+    if video_file.state.name != "ACTIVE":
+        raise RuntimeError(f"Video processing failed with state: {video_file.state.name}")
+
+    await ctx.debug(f"Video ready: {video_file.name}")
+    return video_file
+
+
+def create_gif_description_prompt(context: Optional[str] = None) -> str:
+    """
+    Create a prompt for generating alt text for GIF/animation content.
+
+    Args:
+        context: Optional document context
+
+    Returns:
+        Prompt string for Gemini
+    """
+    base_prompt = """You are an expert at creating accessible alt text for animations and GIFs.
+Your alt text should be:
+1. Concise but descriptive (typically 50-125 characters)
+2. Focus on the action or motion being shown
+3. Describe key visual elements and their changes
+4. Capture the animation's purpose or mood
+5. Avoid phrases like "GIF of" or "animation showing" unless necessary
+"""
+
+    if context:
+        base_prompt += f"""
+
+The animation appears in the following document context:
+---
+{context}
+---
+
+Generate alt text that is relevant to this specific context."""
+
+    base_prompt += """
+
+Provide only the alt text, without any additional explanation or formatting."""
+
+    return base_prompt
+
+
+async def generate_description_for_gif(
+    video_file: Any,
+    context: Optional[str],
+    model_name: str,
+    ctx: Context
+) -> str:
+    """
+    Generate a description for a GIF (uploaded as video) using Gemini.
+
+    Args:
+        video_file: Gemini File object from upload_video_to_gemini
+        context: Optional document context
+        model_name: Gemini model to use
+        ctx: FastMCP context
+
+    Returns:
+        Generated alt text for the GIF
+    """
+    client = genai_new.Client(api_key=GEMINI_API_KEY)
+    prompt = create_gif_description_prompt(context)
+
+    await ctx.debug(f"Generating description for GIF using {model_name}")
+
+    response = await asyncio.to_thread(
+        client.models.generate_content,
+        model=model_name,
+        contents=[
+            genai_types.Part.from_uri(file_uri=video_file.uri, mime_type="video/mp4"),
+            prompt
+        ],
+        config={
+            "temperature": 0.3,
+            "top_p": 0.8,
+            "top_k": 40,
+        }
+    )
+
+    return response.text.strip()
 
 
 def is_text_heavy_image(image: Image.Image) -> bool:
@@ -294,13 +522,13 @@ async def generate_alt_for_batch(
 
 @mcp.tool(
     name="generate_alt_tags",
-    description="Generate meaningful alt tags for images using Gemini LLM",
+    description="Generate meaningful alt tags for images and GIFs using Gemini LLM",
 )
 async def generate_alt_tags(
     images: list[str] = Field(
         min_length=1,
         max_length=20,
-        description="List of image paths, URLs, or base64 data URLs (1-20 images)"
+        description="List of image/GIF paths, URLs, or base64 data URLs (1-20 items). GIFs require FFmpeg."
     ),
     context: Optional[str] = Field(
         default=None,
@@ -319,11 +547,16 @@ async def generate_alt_tags(
     ctx: Context = None,
 ) -> ToolResult:
     """
-    Generate accessible alt tags for images using Google's Gemini LLM.
+    Generate accessible alt tags for images and GIFs using Google's Gemini LLM.
 
     Automatically optimizes large images to reduce token usage while maintaining
     readability. Supports batch processing for multiple images with contextual
     understanding.
+
+    GIF support:
+    - GIFs are converted to MP4 using FFmpeg and processed as video
+    - Requires FFmpeg to be installed on the system
+    - GIFs are processed individually (not batched with images)
     """
     total = len(images)
     start_time = datetime.now(timezone.utc)
@@ -336,27 +569,37 @@ async def generate_alt_tags(
 
     await ctx.report_progress(0, total, "Loading and optimizing images")
 
-    # Load and optimize all images
+    # Separate GIFs from regular images
     processed_images = []
+    gif_inputs = []
     failed_images = []
 
     for i, image_input in enumerate(images):
         try:
             await ctx.report_progress(i, total, f"Processing image {i+1}/{total}")
-            image_data = await load_image(image_input, ctx)
-            processed_images.append((i, image_input, image_data))
+
+            # Check if it's a GIF file
+            path = Path(image_input)
+            if path.exists() and path.is_file() and is_gif_file(path):
+                await ctx.info(f"Detected GIF: {path.name}")
+                gif_inputs.append((i, image_input, path))
+            else:
+                # Regular image processing
+                image_data = await load_image(image_input, ctx)
+                processed_images.append((i, image_input, image_data))
         except Exception as e:
             await ctx.warning(f"Failed to load image {i+1}: {str(e)}")
             failed_images.append((i, image_input, str(e)))
 
-    if not processed_images:
+    if not processed_images and not gif_inputs:
         return ToolResult(
-            content=[{"type": "text", "text": "Failed to load any images"}],
+            content=[{"type": "text", "text": "Failed to load any images or GIFs"}],
             structured_content={"error": "No images could be processed"}
         )
 
     # Generate alt tags in batches
-    await ctx.info(f"Generating alt tags for {len(processed_images)} image(s)")
+    if processed_images:
+        await ctx.info(f"Generating alt tags for {len(processed_images)} image(s)")
     all_alt_texts = {}
 
     for batch_start in range(0, len(processed_images), batch_size):
@@ -421,18 +664,64 @@ async def generate_alt_tags(
             for idx, original_input, _ in batch:
                 all_alt_texts[original_input] = f"Error: {str(e)}"
 
+    # Process GIFs (each GIF is processed individually due to video upload requirement)
+    if gif_inputs:
+        await ctx.info(f"Processing {len(gif_inputs)} GIF(s) via video pipeline")
+        temp_files = []  # Track temp files for cleanup
+
+        for idx, original_input, gif_path in gif_inputs:
+            mp4_path = None
+            try:
+                await ctx.report_progress(
+                    len(processed_images) + gif_inputs.index((idx, original_input, gif_path)),
+                    total,
+                    f"Processing GIF: {gif_path.name}"
+                )
+
+                # Convert GIF to MP4
+                mp4_path = await convert_gif_to_mp4(gif_path, ctx)
+                temp_files.append(mp4_path)
+
+                # Upload to Gemini File API
+                video_file = await upload_video_to_gemini(mp4_path, ctx)
+
+                # Generate description
+                alt_text = await generate_description_for_gif(
+                    video_file,
+                    loaded_context,
+                    model_name,
+                    ctx
+                )
+                all_alt_texts[original_input] = alt_text
+
+            except Exception as e:
+                await ctx.error(f"Failed to process GIF {gif_path.name}: {str(e)}")
+                all_alt_texts[original_input] = f"Error: {str(e)}"
+                failed_images.append((idx, original_input, str(e)))
+
+        # Cleanup temp files
+        for temp_file in temp_files:
+            try:
+                temp_file.unlink(missing_ok=True)
+            except Exception:
+                pass  # Best effort cleanup
+
     # Add failed images to results
     for idx, original_input, error in failed_images:
-        all_alt_texts[original_input] = f"Failed to load: {error}"
+        if original_input not in all_alt_texts:  # Don't overwrite existing error messages
+            all_alt_texts[original_input] = f"Failed to load: {error}"
 
     duration = (datetime.now(timezone.utc) - start_time).total_seconds()
     await ctx.report_progress(total, total, "Alt tag generation complete")
 
     # Prepare structured response
+    successful_count = len([v for v in all_alt_texts.values() if not v.startswith("Failed") and not v.startswith("Error")])
     stats = {
         "total_images": total,
-        "successful": len([v for v in all_alt_texts.values() if not v.startswith("Failed") and not v.startswith("Error")]),
-        "failed": len(failed_images),
+        "images": len(processed_images),
+        "gifs": len(gif_inputs),
+        "successful": successful_count,
+        "failed": total - successful_count,
         "duration_seconds": round(duration, 2),
     }
 
