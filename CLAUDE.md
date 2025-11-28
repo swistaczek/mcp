@@ -365,19 +365,22 @@ Generates accessible descriptions for images and GIFs using Gemini LLM.
 - `images: list[str]` - Image/GIF paths (1-20)
 - `type: str = "alt"` - Description type:
   - `"alt"`: Concise alt text (50-125 chars) - suitable for HTML alt attributes
-  - `"description"`: Detailed descriptions (150-300 chars) - optimized for screen readers and assistive technology
+  - `"description"`: Adaptive descriptions - auto-detects tutorial content for verbose step-by-step narration
 - `context: str?` - Document context for more relevant descriptions
 - `batch_size: int = 5` - Images per Gemini request (1-10)
 - `model: str?` - Gemini model override (default: gemini-flash-latest)
 
 **Description Types:**
-- **"alt" (default)**: Concise, focused descriptions for HTML alt attributes
-- **"description"**: Detailed descriptions for visually impaired users, includes:
-  - Spatial layout (left, right, foreground, background)
-  - Colors, textures, and visual details
-  - Visible text in images
-  - Actions, expressions, and positioning
-  - Mood, context, and purpose
+- **"alt" (default)**: Concise, focused descriptions for HTML alt attributes (50-125 chars)
+- **"description"**: Adaptive descriptions that auto-detect content type:
+  - **For UI tutorials/screencasts**: Detailed step-by-step narration with no length limit
+    - "Click the 'Save' button", "Select 'Export' from the dropdown"
+    - Describes each action: what, where, and result
+    - Includes text typed, values entered, transitions
+  - **For non-tutorial content**: Detailed but concise (150-300 chars)
+    - Spatial layout, colors, textures
+    - Visible text, actions, expressions
+    - Mood, context, and purpose
 
 **Output Structure:**
 ```json

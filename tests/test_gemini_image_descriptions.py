@@ -243,11 +243,16 @@ class TestPromptGeneration:
         assert "50-125 characters" in prompt
 
     def test_create_alt_generation_prompt_description_mode(self):
-        """Test prompt generation for detailed description mode."""
+        """Test prompt generation for detailed description mode with auto-detection."""
         prompt = gemini_alt.create_alt_generation_prompt(description_type="description")
 
         assert "visually impaired users" in prompt
         assert "screen readers" in prompt
+        # Check for tutorial auto-detection
+        assert "Adapt your description style" in prompt
+        assert "UI screenshots/tutorials" in prompt
+        assert "step-by-step" in prompt.lower()
+        # Check for non-tutorial guidance
         assert "150-300 characters" in prompt
         assert "spatial layout" in prompt
 
@@ -267,11 +272,16 @@ class TestPromptGeneration:
         assert "image_1" in prompt
 
     def test_create_gif_description_prompt_description_mode(self):
-        """Test GIF description prompt for detailed mode."""
+        """Test GIF description prompt for detailed mode with auto-detection."""
         prompt = gemini_alt.create_gif_description_prompt(description_type="description")
 
         assert "visually impaired users" in prompt
         assert "screen readers" in prompt
+        # Check for tutorial auto-detection
+        assert "Adapt your description style" in prompt
+        assert "UI tutorials/screencasts" in prompt
+        assert "step-by-step" in prompt.lower()
+        # Check for non-tutorial guidance
         assert "150-300 characters" in prompt
         assert "sequence of actions" in prompt
 

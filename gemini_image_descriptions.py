@@ -196,17 +196,31 @@ def create_gif_description_prompt(
         Prompt string for Gemini
     """
     if description_type == "description":
-        base_prompt = """You are an expert at creating detailed animation descriptions for visually impaired users.
+        base_prompt = """You are an expert at creating detailed descriptions for animations and GIFs for visually impaired users.
 Your descriptions will be read aloud by screen readers and assistive technology.
 
-Your descriptions should:
-1. Be detailed and comprehensive (150-300 characters)
-2. Describe the sequence of actions and movements step by step
-3. Mention timing and pacing (fast, slow, smooth, abrupt)
-4. Include visual details like colors, UI elements, and text shown
-5. Describe any buttons, menus, or interface elements that appear
-6. Explain the purpose or outcome of the demonstrated action
-7. Be written in clear, natural language as if describing to a friend who cannot see
+IMPORTANT: Adapt your description style based on the content:
+
+**For UI tutorials/screencasts/walkthroughs:**
+Provide step-by-step narration with no length limit:
+1. Start with the initial state/screen shown
+2. For each action, specify:
+   - WHAT is clicked/selected (button name, menu item, icon, field)
+   - WHERE it is located (top-right, sidebar, dropdown menu, etc.)
+   - The RESULT of the action (what appears, changes, or happens)
+3. Include any text typed, values entered, or options selected
+4. Note transitions, loading states, or confirmation dialogs
+5. End with the final state achieved
+Use imperative language: "Click the 'Save' button", "Select 'Export' from the dropdown"
+
+**For non-tutorial animations (reactions, illustrations, art, memes):**
+Provide a detailed but concise description (150-300 characters):
+1. Describe the sequence of actions and movements
+2. Mention timing and pacing (fast, slow, smooth, abrupt)
+3. Include visual details like colors and key elements
+4. Convey the mood, context, and purpose
+
+Be written in clear, natural language as if describing to a friend who cannot see.
 """
     else:
         base_prompt = """You are an expert at creating accessible alt text for animations and GIFs.
@@ -442,14 +456,30 @@ def create_alt_generation_prompt(
         base_prompt = """You are an expert at creating detailed image descriptions for visually impaired users.
 Your descriptions will be read aloud by screen readers and assistive technology.
 
-Your descriptions should:
-1. Be detailed and comprehensive (150-300 characters)
-2. Describe spatial layout (left, right, foreground, background)
-3. Include colors, textures, and visual details
-4. Mention any text visible in the image
-5. Describe people's actions, expressions, and positioning
-6. Convey the mood, context, and purpose of the image
-7. Be written in clear, natural language as if describing to a friend who cannot see
+IMPORTANT: Adapt your description style based on the content:
+
+**For UI screenshots/tutorials/annotated instructions:**
+Provide step-by-step guidance with no length limit:
+1. Start with the overall context (what application/screen is shown)
+2. Identify and describe UI elements in logical order:
+   - Buttons, menus, icons, and their labels
+   - Input fields and their current values
+   - Selected/highlighted elements
+   - Annotations, arrows, or callouts if present
+3. For annotated screenshots, follow the annotation sequence
+4. Describe the implied action: what to click, type, or select
+5. Note important visual cues (error states, success indicators, tooltips)
+Use imperative language: "Click the 'Save' button in the top-right corner"
+
+**For non-tutorial images (photos, art, diagrams, charts):**
+Provide a detailed but concise description (150-300 characters):
+1. Describe spatial layout (left, right, foreground, background)
+2. Include colors, textures, and visual details
+3. Mention any text visible in the image
+4. Describe people's actions, expressions, and positioning
+5. Convey the mood, context, and purpose
+
+Be written in clear, natural language as if describing to a friend who cannot see.
 """
     else:
         base_prompt = """You are an expert at creating accessible alt text for images.
