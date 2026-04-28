@@ -294,15 +294,15 @@ class TestGeminiIntegration:
     """Test Gemini API integration."""
 
     @pytest.mark.asyncio
-    @patch('gemini_image_descriptions.genai.GenerativeModel')
-    async def test_generate_alt_for_batch_success(self, mock_model_class):
+    @patch('gemini_image_descriptions.genai.Client')
+    async def test_generate_alt_for_batch_success(self, mock_client_class):
         """Test successful batch alt tag generation."""
-        # Mock model instance
-        mock_model = MagicMock()
+        # Mock client instance
+        mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.text = '{"image_1": "Connect data sources button", "image_2": "Web selection dialog"}'
-        mock_model.generate_content.return_value = mock_response
-        mock_model_class.return_value = mock_model
+        mock_client.models.generate_content.return_value = mock_response
+        mock_client_class.return_value = mock_client
 
         # Create test images
         images = [
@@ -318,18 +318,18 @@ class TestGeminiIntegration:
         # Check results
         assert result["image_1"] == "Connect data sources button"
         assert result["image_2"] == "Web selection dialog"
-        mock_model.generate_content.assert_called_once()
+        mock_client.models.generate_content.assert_called_once()
 
     @pytest.mark.asyncio
-    @patch('gemini_image_descriptions.genai.GenerativeModel')
-    async def test_generate_alt_for_batch_json_error(self, mock_model_class):
+    @patch('gemini_image_descriptions.genai.Client')
+    async def test_generate_alt_for_batch_json_error(self, mock_client_class):
         """Test handling of JSON parsing errors."""
-        # Mock model instance
-        mock_model = MagicMock()
+        # Mock client instance
+        mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.text = "This is not valid JSON"
-        mock_model.generate_content.return_value = mock_response
-        mock_model_class.return_value = mock_model
+        mock_client.models.generate_content.return_value = mock_response
+        mock_client_class.return_value = mock_client
 
         # Create test images
         images = [(b"fake_image", "image/jpeg")]
@@ -348,19 +348,19 @@ class TestGenerateImageDescriptionsTool:
     """Test the main generate_image_descriptions tool."""
 
     @pytest.mark.asyncio
-    @patch('gemini_image_descriptions.genai.GenerativeModel')
+    @patch('gemini_image_descriptions.genai.Client')
     @patch('gemini_image_descriptions.load_image')
-    async def test_generate_descriptions_single_image(self, mock_load_image, mock_model_class):
+    async def test_generate_descriptions_single_image(self, mock_load_image, mock_client_class):
         """Test generating description for a single image."""
         # Mock image loading (now returns 3-tuple with checksum)
         mock_load_image.return_value = (b"fake_image_data", "image/jpeg", "abc123def456")
 
-        # Mock model instance
-        mock_model = MagicMock()
+        # Mock client instance
+        mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.text = "Facebook Pixel setup dialog"
-        mock_model.generate_content.return_value = mock_response
-        mock_model_class.return_value = mock_model
+        mock_client.models.generate_content.return_value = mock_response
+        mock_client_class.return_value = mock_client
 
         # Mock context
         ctx = AsyncMock()
@@ -382,19 +382,19 @@ class TestGenerateImageDescriptionsTool:
         assert result.structured_content["test.png"]["checksum"] == "abc123def456"
 
     @pytest.mark.asyncio
-    @patch('gemini_image_descriptions.genai.GenerativeModel')
+    @patch('gemini_image_descriptions.genai.Client')
     @patch('gemini_image_descriptions.load_image')
-    async def test_generate_descriptions_description_type(self, mock_load_image, mock_model_class):
+    async def test_generate_descriptions_description_type(self, mock_load_image, mock_client_class):
         """Test generating detailed descriptions for accessibility."""
         # Mock image loading (now returns 3-tuple with checksum)
         mock_load_image.return_value = (b"fake_image_data", "image/jpeg", "checksum123")
 
-        # Mock model instance
-        mock_model = MagicMock()
+        # Mock client instance
+        mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.text = "A detailed dialog showing Facebook Pixel setup with blue buttons on the right side"
-        mock_model.generate_content.return_value = mock_response
-        mock_model_class.return_value = mock_model
+        mock_client.models.generate_content.return_value = mock_response
+        mock_client_class.return_value = mock_client
 
         # Mock context
         ctx = AsyncMock()
@@ -414,9 +414,9 @@ class TestGenerateImageDescriptionsTool:
         assert "failed" not in result.structured_content
 
     @pytest.mark.asyncio
-    @patch('gemini_image_descriptions.genai.GenerativeModel')
+    @patch('gemini_image_descriptions.genai.Client')
     @patch('gemini_image_descriptions.load_image')
-    async def test_generate_descriptions_multiple_images(self, mock_load_image, mock_model_class):
+    async def test_generate_descriptions_multiple_images(self, mock_load_image, mock_client_class):
         """Test generating descriptions for multiple images."""
         # Mock image loading (now returns 3-tuple with checksum)
         mock_load_image.side_effect = [
@@ -425,12 +425,12 @@ class TestGenerateImageDescriptionsTool:
             (b"image3", "image/jpeg", "checksum3")
         ]
 
-        # Mock model instance
-        mock_model = MagicMock()
+        # Mock client instance
+        mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.text = '{"image_1": "First image", "image_2": "Second image", "image_3": "Third image"}'
-        mock_model.generate_content.return_value = mock_response
-        mock_model_class.return_value = mock_model
+        mock_client.models.generate_content.return_value = mock_response
+        mock_client_class.return_value = mock_client
 
         # Mock context
         ctx = AsyncMock()
@@ -451,9 +451,9 @@ class TestGenerateImageDescriptionsTool:
         assert result.structured_content["3.png"]["description"] == "Third image"
 
     @pytest.mark.asyncio
-    @patch('gemini_image_descriptions.genai.GenerativeModel')
+    @patch('gemini_image_descriptions.genai.Client')
     @patch('gemini_image_descriptions.load_image')
-    async def test_generate_descriptions_with_context_file(self, mock_load_image, mock_model_class, tmp_path):
+    async def test_generate_descriptions_with_context_file(self, mock_load_image, mock_client_class, tmp_path):
         """Test generating descriptions with context loaded from a file."""
         # Create a context file
         context_file = tmp_path / "context.md"
@@ -463,12 +463,12 @@ class TestGenerateImageDescriptionsTool:
         # Mock image loading (now returns 3-tuple with checksum)
         mock_load_image.return_value = (b"fake_image_data", "image/jpeg", "ctx_checksum")
 
-        # Mock model instance
-        mock_model = MagicMock()
+        # Mock client instance
+        mock_client = MagicMock()
         mock_response = MagicMock()
         mock_response.text = "Product interface screenshot"
-        mock_model.generate_content.return_value = mock_response
-        mock_model_class.return_value = mock_model
+        mock_client.models.generate_content.return_value = mock_response
+        mock_client_class.return_value = mock_client
 
         # Mock context
         ctx = AsyncMock()
@@ -656,7 +656,7 @@ class TestGifUploadAndGeneration:
         """Test video upload with mocked Gemini client."""
         ctx = AsyncMock()
 
-        # Mock the genai_new.Client
+        # Mock the genai.Client
         mock_file = MagicMock()
         mock_file.name = "files/test123"
         mock_file.state.name = "ACTIVE"
@@ -666,7 +666,7 @@ class TestGifUploadAndGeneration:
         mock_client.files.upload.return_value = mock_file
         mock_client.files.get.return_value = mock_file
 
-        with patch.object(gemini_alt, 'genai_new') as mock_genai:
+        with patch.object(gemini_alt, 'genai') as mock_genai:
             mock_genai.Client.return_value = mock_client
 
             result = await gemini_alt.upload_video_to_gemini(
@@ -692,7 +692,7 @@ class TestGifUploadAndGeneration:
         mock_client = MagicMock()
         mock_client.models.generate_content.return_value = mock_response
 
-        with patch.object(gemini_alt, 'genai_new') as mock_genai:
+        with patch.object(gemini_alt, 'genai') as mock_genai:
             mock_genai.Client.return_value = mock_client
 
             result = await gemini_alt.generate_description_for_gif(

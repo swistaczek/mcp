@@ -14,8 +14,7 @@ from pathlib import Path
 from typing import Any, Optional, Union
 from urllib.parse import urlparse
 
-import google.generativeai as genai
-from google import genai as genai_new
+from google import genai
 from google.genai import types as genai_types
 from fastmcp import FastMCP, Context
 from fastmcp.tools.tool import ToolResult
@@ -25,12 +24,10 @@ from pydantic import Field
 
 mcp = FastMCP("Image Descriptions")
 
-# Configure Gemini API
+# Get Gemini API key
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY environment variable is required")
-
-genai.configure(api_key=GEMINI_API_KEY)
 
 # Default model for best performance/cost
 DEFAULT_MODEL = "gemini-flash-latest"
@@ -162,7 +159,7 @@ async def upload_video_to_gemini(
         RuntimeError: If upload or processing fails
     """
     # Use the new genai client for File API
-    client = genai_new.Client(api_key=GEMINI_API_KEY)
+    client = genai.Client(api_key=GEMINI_API_KEY)
 
     await ctx.debug(f"Uploading video to Gemini: {video_path.name}")
 
@@ -283,7 +280,7 @@ async def generate_description_for_gif(
     Returns:
         Generated alt text for the GIF
     """
-    client = genai_new.Client(api_key=GEMINI_API_KEY)
+    client = genai.Client(api_key=GEMINI_API_KEY)
     prompt = create_gif_description_prompt(context, description_type)
 
     await ctx.debug(f"Generating description for GIF using {model_name}")
@@ -295,11 +292,11 @@ async def generate_description_for_gif(
             genai_types.Part.from_uri(file_uri=video_file.uri, mime_type="video/mp4"),
             prompt
         ],
-        config={
-            "temperature": 0.3,
-            "top_p": 0.8,
-            "top_k": 40,
-        }
+        config=genai_types.GenerateContentConfig(
+            temperature=0.3,
+            top_p=0.8,
+            top_k=40,
+        )
     )
 
     return response.text.strip()
@@ -569,24 +566,22 @@ async def generate_alt_for_batch(
 
     for i, (image_bytes, mime_type) in enumerate(images, 1):
         contents.append(f"Image {i}:")
-        contents.append({
-            "mime_type": mime_type,
-            "data": base64.b64encode(image_bytes).decode()
-        })
+        contents.append(genai_types.Part.from_bytes(data=image_bytes, mime_type=mime_type))
 
     try:
-        # Create model instance
-        model = genai.GenerativeModel(model_name)
+        # Create client instance
+        client = genai.Client(api_key=GEMINI_API_KEY)
 
         # Generate alt text using Gemini
         response = await asyncio.to_thread(
-            model.generate_content,
-            contents,
-            generation_config={
-                "temperature": 0.3,  # Lower temperature for more consistent output
-                "top_p": 0.8,
-                "top_k": 40,
-            }
+            client.models.generate_content,
+            model=model_name,
+            contents=contents,
+            config=genai_types.GenerateContentConfig(
+                temperature=0.3,  # Lower temperature for more consistent output
+                top_p=0.8,
+                top_k=40,
+            )
         )
 
         # Parse the response
@@ -731,23 +726,21 @@ async def generate_image_descriptions(
                 prompt = create_alt_generation_prompt(loaded_context, is_batch=False, description_type=description_type)
                 image_bytes, mime_type = batch_images[0]
 
-                # Create model instance for single image
-                model_instance = genai.GenerativeModel(model_name)
+                # Create client instance for single image
+                client = genai.Client(api_key=GEMINI_API_KEY)
 
                 response = await asyncio.to_thread(
-                    model_instance.generate_content,
-                    [
+                    client.models.generate_content,
+                    model=model_name,
+                    contents=[
                         prompt,
-                        {
-                            "mime_type": mime_type,
-                            "data": base64.b64encode(image_bytes).decode()
-                        }
+                        genai_types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
                     ],
-                    generation_config={
-                        "temperature": 0.3,
-                        "top_p": 0.8,
-                        "top_k": 40,
-                    }
+                    config=genai_types.GenerateContentConfig(
+                        temperature=0.3,
+                        top_p=0.8,
+                        top_k=40,
+                    )
                 )
 
                 idx, original_input, _, _ = batch[0]

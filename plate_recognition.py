@@ -6,14 +6,14 @@ which vehicle is most likely committing an offense.
 """
 
 import asyncio
-import base64
 import io
 import json
 import os
 from pathlib import Path
 from typing import Optional
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types as genai_types
 from fastmcp import FastMCP, Context
 from fastmcp.tools.tool import ToolResult
 from PIL import Image
@@ -30,12 +30,8 @@ except ImportError:
 
 mcp = FastMCP("Plate Recognition")
 
-# Configure Gemini API
+# Get Gemini API key
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-# Only configure if API key is available (allows importing for tests)
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
 
 # Default model for vision tasks
 DEFAULT_MODEL = "gemini-flash-latest"
@@ -198,25 +194,23 @@ async def recognize_plates(
         # Create prompt
         prompt = create_plate_recognition_prompt()
 
-        # Create model instance
-        model_instance = genai.GenerativeModel(model_name)
+        # Create client instance
+        client = genai.Client(api_key=GEMINI_API_KEY)
 
         # Generate analysis using Gemini
         await ctx.info("Sending image to Gemini for analysis...")
         response = await asyncio.to_thread(
-            model_instance.generate_content,
-            [
+            client.models.generate_content,
+            model=model_name,
+            contents=[
                 prompt,
-                {
-                    "mime_type": mime_type,
-                    "data": base64.b64encode(image_bytes).decode()
-                }
+                genai_types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
             ],
-            generation_config={
-                "temperature": 0.2,  # Lower temperature for more consistent JSON output
-                "top_p": 0.8,
-                "top_k": 40,
-            }
+            config=genai_types.GenerateContentConfig(
+                temperature=0.2,  # Lower temperature for more consistent JSON output
+                top_p=0.8,
+                top_k=40,
+            )
         )
 
         # Parse response
