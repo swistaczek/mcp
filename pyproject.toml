@@ -14,6 +14,7 @@ dependencies = [
     "lxml>=6.1.0",
     "pillow-heif>=1.3.0",
     "aioresponses>=0.7.8",
+    "pypdf>=5.0",
 ]
 
 [build-system]
@@ -21,7 +22,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["domains", "gemini_image_descriptions", "tablica", "exif_extractor", "plate_recognition", "ovh_verifier", "czynaczas"]
+py-modules = ["domains", "gemini_image_descriptions", "tablica", "exif_extractor", "plate_recognition", "ovh_verifier", "czynaczas", "gazetki"]
 
 [tool.pytest.ini_options]
 markers = [

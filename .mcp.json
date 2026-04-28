@@ -60,6 +60,12 @@
       "command": "sh",
       "args": ["-c", "uv run --with fastmcp fastmcp run czynaczas.fastmcp.json"],
       "env": {}
+    },
+    "Gazetki": {
+      "type": "stdio",
+      "command": "sh",
+      "args": ["-c", "uv run --with fastmcp fastmcp run gazetki.fastmcp.json"],
+      "env": {}
     }
   }
 }
