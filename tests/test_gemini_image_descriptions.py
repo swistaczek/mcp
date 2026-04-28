@@ -339,9 +339,11 @@ class TestGeminiIntegration:
         # Generate alt tags
         result = await gemini_alt.generate_alt_for_batch(images, None, "gemini-flash-latest", ctx)
 
-        # Should fallback to generic alt text
-        assert "image_1" in result
-        ctx.warning.assert_called_with("Failed to parse batch response as JSON, using fallback parsing")
+        assert result == {"image_1": ""}
+        ctx.warning.assert_called_once()
+        warning_msg = ctx.warning.call_args.args[0]
+        assert "Failed to parse batch response as JSON" in warning_msg
+        assert "This is not valid JSON" in warning_msg
 
 
 class TestGenerateImageDescriptionsTool:

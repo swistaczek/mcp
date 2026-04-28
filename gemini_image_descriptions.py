@@ -572,33 +572,30 @@ async def generate_alt_for_batch(
         # Create client instance
         client = genai.Client(api_key=GEMINI_API_KEY)
 
-        # Generate alt text using Gemini
+        # Generate alt text using Gemini — force JSON response so we don't
+        # have to strip markdown fences the model sometimes adds.
         response = await asyncio.to_thread(
             client.models.generate_content,
             model=model_name,
             contents=contents,
             config=genai_types.GenerateContentConfig(
-                temperature=0.3,  # Lower temperature for more consistent output
+                temperature=0.3,
                 top_p=0.8,
                 top_k=40,
+                response_mime_type="application/json",
             )
         )
 
-        # Parse the response
         result_text = response.text.strip()
+        if result_text.startswith("```"):
+            result_text = result_text.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
 
-        # Try to parse as JSON for batch mode
         import json
         try:
-            alt_texts = json.loads(result_text)
-            return alt_texts
+            return json.loads(result_text)
         except json.JSONDecodeError:
-            # Fallback: try to extract alt texts manually
-            await ctx.warning("Failed to parse batch response as JSON, using fallback parsing")
-            alt_texts = {}
-            for i in range(1, len(images) + 1):
-                alt_texts[f"image_{i}"] = f"Generated alt text for image {i}"
-            return alt_texts
+            await ctx.warning(f"Failed to parse batch response as JSON. Raw: {result_text[:500]}")
+            return {f"image_{i}": "" for i in range(1, len(images) + 1)}
 
     except Exception as e:
         await ctx.error(f"Gemini API error: {str(e)}")
