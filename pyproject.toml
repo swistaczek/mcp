@@ -21,7 +21,7 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["domains", "gemini_image_descriptions", "tablica", "exif_extractor", "plate_recognition", "ovh_verifier"]
+py-modules = ["domains", "gemini_image_descriptions", "tablica", "exif_extractor", "plate_recognition", "ovh_verifier", "czynaczas"]
 
 [tool.pytest.ini_options]
 markers = [

@@ -54,6 +54,12 @@
       "env": {
         "GEMINI_API_KEY": "${GEMINI_API_KEY}"
       }
+    },
+    "Czy Na Czas": {
+      "type": "stdio",
+      "command": "sh",
+      "args": ["-c", "uv run --with fastmcp fastmcp run czynaczas.fastmcp.json"],
+      "env": {}
     }
   }
 }
