@@ -296,3 +296,7 @@ async def recognize_plates(
             content=[{"type": "text", "text": error_msg}],
             structured_content={"error": str(e)}
         )
+
+
+if __name__ == "__main__":
+    mcp.run()

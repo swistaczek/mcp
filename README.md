@@ -1,88 +1,113 @@
 # MCP Servers
 
-Personal MCP servers collection using mise + Python 3.13 + FastMCP.
+Personal MCP servers collection — Python 3.13 + [FastMCP](https://gofastmcp.com), managed with [mise](https://mise.jdx.dev) and [uv](https://docs.astral.sh/uv/).
+
+## Requirements
+
+- **mise** (`brew install mise`) — provisions Python 3.13 and uv automatically from `.mise.toml`.
+- That's it. mise picks up `uv` from `[tools]` in `.mise.toml`; you don't need to install `python` or `uv` yourself.
 
 ## Quick Start
 
 ```bash
-mise run install        # Install dependencies
-python -m pytest tests/ # Run tests
-mise tasks             # List available tasks
+git clone https://github.com/swistaczek/mcp.git
+cd mcp
+mise install              # provisions Python 3.13 + uv from .mise.toml
+mise run install          # uv sync — installs all project deps from uv.lock
+mise run test             # 141 tests, ~3s, no network
 ```
+
+To register the servers with Claude Code (user-scope, one-shot):
+
+```bash
+mise run claude-install                   # registers key-less servers
+GEMINI_API_KEY=sk-... mise run claude-install-gemini   # registers Gemini servers
+```
+
+Then restart Claude Code and the servers appear under their slug names (`czynaczas`, `gazetki`, `tablica`, `exif_extractor`, `domains`, plus `gemini_image_descriptions` and `plate_recognition` if you ran the second task). Remove with `mise run claude-uninstall`.
 
 ## Configuration
 
-API keys can be configured in two ways:
+### API keys
 
-1. **Claude Code settings** (recommended for Claude Code users):
-   - Add to `.claude/settings.local.json` (gitignored):
-     ```json
-     {
-       "env": {
-         "GEMINI_API_KEY": "your-key-here"
-       }
-     }
-     ```
-   - API keys are automatically available to all MCP servers
+`gemini_image_descriptions` and `plate_recognition` need `GEMINI_API_KEY` (free at [AI Studio](https://aistudio.google.com/)). Two ways to provide it:
 
-2. **Environment file** (for other MCP clients):
-   - Copy `.env.example` to `.env` and add your keys
-   - Note: `.env` is gitignored to protect secrets
+1. **Claude Code settings** — add to `.claude/settings.local.json` (gitignored):
+   ```json
+   { "env": { "GEMINI_API_KEY": "your-key-here" } }
+   ```
+2. **Environment** — `cp .env.example .env`, edit, and use `mise run claude-install-gemini` which forwards the var into the registration via `claude mcp add -e`.
+
+### Two install paths
+
+Servers can be registered two ways and both work:
+
+- **Direct python (recommended)** — what `mise run claude-install` does. Points Claude Code at `.venv/bin/python <server>.py`. Fast cold-start, no fastmcp.json indirection, no `uv` shell-out.
+- **fastmcp.json** — what `.mcp.json` uses (read by Claude Code on session start when this repo's directory is its cwd). Goes through `uv run --project . fastmcp run <server>.fastmcp.json`. Requires `uv` on `PATH` and the project's cwd to be this repo.
+
+If you bind the repo as a workspace in Claude Code, `.mcp.json` is the easy path. For user-scope (always-on) registration outside this repo, use `mise run claude-install`.
 
 ## Available Servers
 
-### Domain Checker (`domains.py`)
+### Czy Na Czas (`czynaczas.py`)
 
-Batch check domain registration status via WHOIS with DNS fallback.
-- **Tool**: `check_domains` - Check up to 50 domains
-- **Features**: Real-time progress, 50+ TLDs including .com.cn and Chinese TLDs
-- **Usage**: "Check if example.com and test.io are available"
+Polish public-transport realtime data via czynaczas.pl — vehicle positions, delays, ETAs.
+- **Cities**: `poznan`, `warsaw`, `krakow`, `wroclaw`, `lodz`
+- **Tools**:
+  - `list_supported_cities` — list the five cities
+  - `find_stops(city, query)` — diacritic-insensitive multi-token search across the 3000+ stop list per city ("Dabrowskiego" matches "Dąbrowskiego")
+  - `get_trip(city, trip_id)` — route polyline + scheduled stops
+  - `get_vehicle(city, vehicle_id)` — fleet metadata (model, depot, A/C, low-floor)
+  - `get_departures(city, stop_id, destination_filter?, line_filter?)` — headline tool. Snapshots all live vehicles via Socket.IO, filters by destination headsign + line, and computes ETA from each candidate's scheduled arrival plus realtime delay.
+- **Usage**: "Kiedy najbliższy tramwaj 16 z Polna na Ogrody?" → `find_stops` → `get_departures(stop_id, destination_filter="Ogrody")`.
 
-### Gemini Alt Tag Generator (`gemini_alt.py`)
+### Gazetki (`gazetki.py`)
 
-Generate accessible alt tags for images using Google's Gemini LLM.
-- **Tool**: `generate_alt_tags` - Process up to 20 images with optional context
-- **Features**:
-  - Smart image optimization (adaptive resizing for text-heavy images)
-  - Batch processing (up to 10 images per request)
-  - Context from file or text (saves tokens for large documents)
-- **Setup**: Set `GEMINI_API_KEY` in `.env` file (get from [AI Studio](https://aistudio.google.com/))
-- **Usage**:
-  - `generate_alt_tags(images=["img.png"], context="./docs/guide.md")`
-  - Accepts image paths, URLs, or base64 data
+Current promotional flyer PDFs from Polish supermarket chains — Lidl and Biedronka.
+- **Tools**:
+  - `list_flyers(chain)` — `lidl` / `biedronka` / `all`
+  - `download_flyer(chain, flyer_id)` — streams native PDFs (Lidl) or assembles from per-page images (Biedronka)
+  - `get_current_flyers(chain?)` — convenience: headline current flyer per chain
+- **Cache**: `~/.cache/mcp-gazetki/<chain>/<flyer_id>/` (override with `GAZETKI_CACHE_DIR`).
 
 ### Tablica Rejestracyjna PL (`tablica.py`)
 
-Polish license plate reporting integration with tablica-rejestracyjna.pl.
-- **Tools**:
-  - `fetch_comments` - Get all comments/reports for a license plate
-  - `submit_complaint` - Submit new violation reports with images
-- **Features**: HEIC to JPEG conversion, automatic image optimization, LLM-guided workflow
-- **Usage**: "Fetch comments for plate WW12345" or "Submit complaint for plate with image"
+Polish license-plate violation reporting via tablica-rejestracyjna.pl.
+- **Tools**: `fetch_comments`, `submit_complaint` (with image upload + HEIC→JPEG)
 
 ### EXIF Metadata Extractor (`exif_extractor.py`)
 
-Extract EXIF metadata from images with GPS reverse geocoding.
-- **Tool**: `analyze_image_metadata` - Extract metadata from up to 50 images
-- **Features**:
-  - GPS extraction (coordinates, altitude, speed, direction, timestamp)
-  - Reverse geocoding to street addresses (via Nominatim)
-  - Supports PNG, JPEG, HEIC formats
-- **Usage**: "Extract metadata from photo.heic" or "Get GPS location from these images"
+Extract EXIF + GPS from images and reverse-geocode to street addresses.
+- **Tool**: `analyze_image_metadata` (up to 50 images, PNG/JPEG/HEIC, Nominatim geocoding)
 
 ### Plate Recognition (`plate_recognition.py`)
 
-Analyze traffic photos to identify license plates and violations using Gemini Vision.
-- **Tool**: `recognize_plates` - Identify plates and determine violating vehicle
-- **Features**: Multi-vehicle support, violation detection, pedestrian-focused analysis
-- **Setup**: Set `GEMINI_API_KEY` in `.env` file
-- **Usage**: "Analyze violation.jpg and identify the violating vehicle"
+Identify license plates and traffic violations in photos via Gemini Vision.
+- **Tool**: `recognize_plates` (multi-vehicle, pedestrian-perspective reasoning)
+- **Setup**: requires `GEMINI_API_KEY`
+
+### Image Descriptions (`gemini_image_descriptions.py`)
+
+Generate alt text and accessible descriptions for images and GIFs via Gemini.
+- **Tool**: `generate_image_descriptions` (batch up to 20 images, GIF support via FFmpeg)
+- **Setup**: requires `GEMINI_API_KEY`
+
+### Domain Checker (`domains.py`)
+
+Batch domain registration check via WHOIS with DNS fallback and optional OVH browser-verified availability.
+- **Tool**: `check_domains` (up to 50 domains, 50+ TLDs incl. .com.cn and Chinese IDN)
 
 ## Development
 
-To create a new server, see [FastMCP documentation](https://gofastmcp.com). Project uses `mcp-servers` package name to avoid conflicts.
+```bash
+mise tasks                # list all available tasks
+mise run dev <server>.fastmcp.json   # run a server in stdio mode
+mise run test             # quick (no integration)
+mise run test-all         # full (network + GEMINI_API_KEY needed)
+```
+
+To create a new server: copy `czynaczas.py` and `czynaczas.fastmcp.json` as a template, add the module name to `[tool.setuptools] py-modules` in `pyproject.toml`, and re-run `mise run install`. See [FastMCP docs](https://gofastmcp.com) for the full pattern.
 
 ## Links
 
-- [FastMCP](https://gofastmcp.com)
-- [mise](https://mise.jdx.dev)
+- [FastMCP](https://gofastmcp.com) · [mise](https://mise.jdx.dev) · [uv](https://docs.astral.sh/uv/)

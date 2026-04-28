@@ -429,3 +429,7 @@ async def analyze_image_metadata(
             }
         }
     )
+
+
+if __name__ == "__main__":
+    mcp.run()

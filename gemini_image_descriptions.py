@@ -846,3 +846,7 @@ async def generate_image_descriptions(
         content=[{"type": "text", "text": summary}],
         structured_content=structured
     )
+
+
+if __name__ == "__main__":
+    mcp.run()

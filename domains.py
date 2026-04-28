@@ -540,3 +540,7 @@ async def check_domains(
         content=[{"type": "text", "text": summary}],
         structured_content=structured_response,
     )
+
+
+if __name__ == "__main__":
+    mcp.run()

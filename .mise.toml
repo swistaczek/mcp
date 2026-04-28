@@ -1,23 +1,72 @@
+[tools]
+python = "3.13"
+uv = "latest"
+
 [env]
 _.python.venv = { path = ".venv", create = true }
 
 [tasks.install]
-description = "Install project dependencies"
-run = "uv pip install fastmcp"
-
-[tasks.run]
-description = "Run an MCP server"
-run = "fastmcp run {{arg(name='server', default='servers/example.py')}}"
+description = "Sync project dependencies from uv.lock"
+run = "uv sync"
 
 [tasks.dev]
-description = "Run server in development mode"
+description = "Run an MCP server in stdio mode (for local development)"
 alias = "d"
-run = "fastmcp run {{arg(name='server', default='servers/example.py')}} --transport stdio"
+run = "uv run fastmcp run {{arg(name='server', default='czynaczas.fastmcp.json')}} --transport stdio"
+
+[tasks.test]
+description = "Run the full test suite (skipping integration tests)"
+run = "uv run pytest tests/ -v -m 'not integration'"
+
+[tasks.test-all]
+description = "Run the test suite including integration tests (requires network + API keys)"
+run = "uv run pytest tests/ -v"
 
 [tasks.version]
 description = "Show fastmcp version"
-run = "fastmcp version"
+run = "uv run fastmcp version"
 
-[tasks.list]
-description = "List all available MCP servers"
-run = "ls -la servers/"
+# Servers that don't need API keys at startup.
+# (gemini_image_descriptions and plate_recognition need GEMINI_API_KEY,
+#  so they're registered separately by claude-install-gemini.)
+[tasks.claude-install]
+description = "Register all key-less MCP servers with Claude Code (user scope)"
+run = '''
+set -e
+servers="czynaczas tablica exif_extractor domains gazetki ovh_verifier"
+for s in $servers; do
+  case "$s" in
+    ovh_verifier) continue ;;  # helper module, not a server
+  esac
+  claude mcp remove "$s" -s user 2>/dev/null || true
+  claude mcp add "$s" -s user -- \
+    "$MISE_PROJECT_ROOT/.venv/bin/python" \
+    "$MISE_PROJECT_ROOT/$s.py"
+  echo "registered: $s"
+done
+'''
+
+[tasks.claude-install-gemini]
+description = "Register Gemini-backed servers (image descriptions + plate recognition). Requires GEMINI_API_KEY."
+run = '''
+set -e
+if [ -z "$GEMINI_API_KEY" ]; then
+  echo "GEMINI_API_KEY is not set — skipping Gemini-backed servers" >&2
+  exit 1
+fi
+for s in gemini_image_descriptions plate_recognition; do
+  claude mcp remove "$s" -s user 2>/dev/null || true
+  claude mcp add "$s" -s user -e "GEMINI_API_KEY=$GEMINI_API_KEY" -- \
+    "$MISE_PROJECT_ROOT/.venv/bin/python" \
+    "$MISE_PROJECT_ROOT/$s.py"
+  echo "registered: $s"
+done
+'''
+
+[tasks.claude-uninstall]
+description = "Remove all servers in this repo from Claude Code (user scope)"
+run = '''
+for s in czynaczas tablica exif_extractor domains gazetki gemini_image_descriptions plate_recognition; do
+  claude mcp remove "$s" -s user 2>/dev/null && echo "removed: $s" || true
+done
+'''
