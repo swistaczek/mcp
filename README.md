@@ -24,7 +24,7 @@ mise run claude-install                   # registers key-less servers
 GEMINI_API_KEY=sk-... mise run claude-install-gemini   # registers Gemini servers
 ```
 
-Then restart Claude Code and the servers appear under their slug names (`czynaczas`, `gazetki`, `tablica`, `exif_extractor`, `domains`, plus `gemini_image_descriptions` and `plate_recognition` if you ran the second task). Remove with `mise run claude-uninstall`.
+Then restart Claude Code and the servers appear under their slug names (`czynaczas`, `gazetki`, `tablica`, `exif_extractor`, `domains`, `krs`, plus `gemini_image_descriptions` and `plate_recognition` if you ran the second task). Remove with `mise run claude-uninstall`.
 
 ## Configuration
 
@@ -91,6 +91,15 @@ Identify license plates and traffic violations in photos via Gemini Vision.
 Generate alt text and accessible descriptions for images and GIFs via Gemini.
 - **Tool**: `generate_image_descriptions` (batch up to 20 images, GIF support via FFmpeg)
 - **Setup**: requires `GEMINI_API_KEY`
+
+### KRS Poland (`krs.py`)
+
+Polish National Court Register (KRS) Open API — fetch the current or full extract for any registered entity.
+- **Tools**:
+  - `get_krs_current_extract(krs, rejestr?)` — odpis aktualny: name, NIP, REGON, formaPrawna, address, board, capital
+  - `get_krs_full_extract(krs, rejestr?)` — odpis pełny: full historical record (past names, board changes, all entries)
+- **Inputs**: KRS is 10 digits starting with `0` (e.g. `0001236495`); `rejestr` is `P` (companies) or `S` (associations/foundations), defaults to `P`. A 204 response hints at trying the other register.
+- **Source**: `api-krs.ms.gov.pl/api/krs` (no key required). Port of [krs-poland-mcp-server](https://github.com/pkolawa/krs-poland-mcp-server).
 
 ### Domain Checker (`domains.py`)
 

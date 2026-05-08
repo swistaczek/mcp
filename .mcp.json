@@ -66,6 +66,12 @@
       "command": "sh",
       "args": ["-c", "uv run --with fastmcp fastmcp run gazetki.fastmcp.json"],
       "env": {}
+    },
+    "KRS Poland": {
+      "type": "stdio",
+      "command": "sh",
+      "args": ["-c", "uv run --with fastmcp fastmcp run krs.fastmcp.json"],
+      "env": {}
     }
   }
 }

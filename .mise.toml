@@ -33,7 +33,7 @@ run = "uv run fastmcp version"
 description = "Register all key-less MCP servers with Claude Code (user scope)"
 run = '''
 set -e
-servers="czynaczas tablica exif_extractor domains gazetki ovh_verifier"
+servers="czynaczas tablica exif_extractor domains gazetki krs ovh_verifier"
 for s in $servers; do
   case "$s" in
     ovh_verifier) continue ;;  # helper module, not a server
@@ -66,7 +66,7 @@ done
 [tasks.claude-uninstall]
 description = "Remove all servers in this repo from Claude Code (user scope)"
 run = '''
-for s in czynaczas tablica exif_extractor domains gazetki gemini_image_descriptions plate_recognition; do
+for s in czynaczas tablica exif_extractor domains gazetki krs gemini_image_descriptions plate_recognition; do
   claude mcp remove "$s" -s user 2>/dev/null && echo "removed: $s" || true
 done
 '''
