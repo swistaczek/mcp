@@ -350,6 +350,40 @@ Can be used together with Tablica MCP server for complete workflow:
 1. Use `recognize_plates` to analyze photo and identify violating vehicle
 2. Use `submit_complaint` from Tablica MCP to report the violation
 
+### Poznań Events Architecture
+Scraper for the City of Poznań events calendar (`poznan.pl/mim/events/`) — the official municipal "Co? Gdzie? Kiedy?" listing.
+
+**Data Source:**
+- Listing XHR: `GET /mim/events/events.html?co=list&lang=pl&category={ID}&p={PAGE}` — returns the same `.event-box` HTML fragment as the homepage. `category` is empty for "all" or a numeric id (e.g. `214` for Sport). `p` is zero-indexed; each page = 20 events. High `p` returns 404 with empty body.
+- Detail pages: `/mim/events/{slug},{numeric_id}.html` — clean structured selectors (`.event-print-date`, `.event-print-place`, `.event-print-categories`, `.event-print-describe`) plus `og:title` / `og:description` meta tags.
+
+**Tools:**
+1. `list_events(category?, page?, pages?)` — paginated event listing
+   - `category: str?` — numeric id (empty / null for all)
+   - `page: int = 0` — zero-indexed start page
+   - `pages: int = 1` — consecutive pages to fetch in one call (capped at 5)
+   - Returns: `{count, events: [{event_id, title, date (ISO), date_raw, time (HH:MM), place, categories: [{id, name}], thumbnail_url, detail_url}], pages: [{page, count}]}`
+2. `get_event(event_ref)` — single-event detail
+   - `event_ref: str` — numeric id, `slug,id`, `/mim/events/...` path, or full URL
+   - Returns: title, ISO date, time, place, categories, `short_description` (from `og:description`), `description` (full prose with UI controls stripped), `image_url`
+3. `list_event_categories` — category catalog
+   - Returns: `[{id, slug, name}]` sorted alphabetically by name
+
+**Parser Strategy:**
+- List card: relies on `.event-box`, `.description-event-title-link[href]` for id/url, two `<time>` tags by position (date first, time second), `.description-event-place`, `.description-event-category-link[data-id]`, `.image-events img[data-src]`.
+- Detail page: prefers `og:title` / `og:description` for canonical text; reads `.event-print-date` / `.event-print-place` for clean fields; the `.event-print-describe` block is decomposed (banners, share buttons, QR-code UI) before text extraction.
+- Date conversion: Polish `DD.MM.YYYY` → ISO `YYYY-MM-DD`. Time padded to `HH:MM`.
+- Event references accept numeric id, `slug,id[.html]`, absolute path, or full URL.
+
+**Dependencies:**
+- `aiohttp` — async HTTP
+- `beautifulsoup4` + `lxml` — HTML parsing
+
+**Use Cases:**
+- "What's happening in Poznań this weekend?" — `list_events(category=None, pages=2)`
+- "Sport events in Poznań" — `list_events(category="214")`
+- "Tell me about event 179433" — `get_event("179433")`
+
 ### Image Descriptions Architecture
 Generates accessible descriptions for images and GIFs using Gemini LLM.
 
@@ -450,6 +484,15 @@ Tests are organized by functionality:
 - `TestAnalyzeImageMetadataTool` - Main tool functionality (single/batch)
 - Integration tests marked with `@pytest.mark.integration` (hit real Nominatim API)
 
+**Poznań Events Tests** (`tests/test_poznan_events.py`):
+- `TestPolishDateConversion` / `TestTimeNormalization` — date/time format helpers
+- `TestExtractEventId` — id extraction from canonical URLs
+- `TestNormalizeCategory` / `TestResolveEventUrl` — input coercion edge cases
+- `TestListParser` — fixture-driven (real homepage snapshot, 20 events parsed)
+- `TestCategoriesParser` — homepage category nav extraction
+- `TestDetailParser` — fixture-driven event detail page parsing
+- `TestLiveEndpoint` (marked `@pytest.mark.integration`) — live calls against poznan.pl
+
 **Plate Recognition Tests** (`tests/test_plate_recognition.py`):
 - `TestImageOptimization` - Image downscaling and RGB conversion
 - `TestPromptGeneration` - Prompt creation validation
@@ -464,6 +507,8 @@ Test fixtures:
 - `tests/fixtures/example.gif` - Animated GIF for GIF description testing
 - `tests/fixtures/IMG_5134.heic` - iPhone photo with GPS data (Poznań, Poland)
 - `tests/fixtures/IMG_2852.heic` - iPhone photo without GPS data
+- `tests/fixtures/poznan_events_list.html` - Snapshot of the Poznań events homepage (20 cards + category nav)
+- `tests/fixtures/poznan_event_detail.html` - Snapshot of a single Poznań event detail page
 
 ## FastMCP Documentation with Context7
 

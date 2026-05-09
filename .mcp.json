@@ -72,6 +72,12 @@
       "command": "sh",
       "args": ["-c", "uv run --with fastmcp fastmcp run krs.fastmcp.json"],
       "env": {}
+    },
+    "Poznan Events": {
+      "type": "stdio",
+      "command": "sh",
+      "args": ["-c", "uv run --with fastmcp fastmcp run poznan_events.fastmcp.json"],
+      "env": {}
     }
   }
 }

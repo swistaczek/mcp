@@ -24,7 +24,7 @@ mise run claude-install                   # registers key-less servers
 GEMINI_API_KEY=sk-... mise run claude-install-gemini   # registers Gemini servers
 ```
 
-Then restart Claude Code and the servers appear under their slug names (`czynaczas`, `gazetki`, `tablica`, `exif_extractor`, `domains`, `krs`, plus `gemini_image_descriptions` and `plate_recognition` if you ran the second task). Remove with `mise run claude-uninstall`.
+Then restart Claude Code and the servers appear under their slug names (`czynaczas`, `gazetki`, `tablica`, `exif_extractor`, `domains`, `krs`, `poznan_events`, plus `gemini_image_descriptions` and `plate_recognition` if you ran the second task). Remove with `mise run claude-uninstall`.
 
 ## Configuration
 
@@ -100,6 +100,14 @@ Polish National Court Register (KRS) Open API — fetch the current or full extr
   - `get_krs_full_extract(krs, rejestr?)` — odpis pełny: full historical record (past names, board changes, all entries)
 - **Inputs**: KRS is 10 digits starting with `0` (e.g. `0001236495`); `rejestr` is `P` (companies) or `S` (associations/foundations), defaults to `P`. A 204 response hints at trying the other register.
 - **Source**: `api-krs.ms.gov.pl/api/krs` (no key required). Port of [krs-poland-mcp-server](https://github.com/pkolawa/krs-poland-mcp-server).
+
+### Poznań Events (`poznan_events.py`)
+
+City of Poznań events calendar (Co? Gdzie? Kiedy? — `poznan.pl/mim/events/`).
+- **Tools**:
+  - `list_events(category?, page?, pages?)` — paginated event list (20 per page); optional category id filter; up to 5 pages per call
+  - `get_event(event_ref)` — full detail (title, ISO date, time, place, categories, short + long description, hero image). Accepts numeric id, slug+id, path, or full URL
+  - `list_event_categories` — catalog of category names with numeric ids (Sport=214, Muzyka=217, Sztuka=218, Teatr, Film, Książki, Dziecko, …)
 
 ### Domain Checker (`domains.py`)
 
