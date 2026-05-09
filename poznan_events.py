@@ -243,13 +243,43 @@ def _parse_event_detail(html_text: str, source_url: Optional[str] = None) -> dic
             noise.decompose()
         long_description = _clean_text(describe_block.get_text(" ", strip=True))
 
-    # Hero image
-    img_el = soup.select_one(".event-print-photo img, .event-photo img")
-    image_url = _absolute(img_el.get("src") or img_el.get("data-src")) if img_el else None
+    # Hero image: detail pages put the high-res variant on a plain
+    # `<img class="lazyload float-left">` (no `event-img-item`) under
+    # `/mim/main/pictures/...show2.jpg`. Prefer that, fall back to the
+    # thumbnail-sized `.event-img-item`.
+    image_url = None
+    for sel in (
+        "article img.lazyload.float-left",
+        "article img.event-img-item",
+        ".event-print-photo img",
+        ".event-photo img",
+    ):
+        img_el = soup.select_one(sel)
+        if img_el is None:
+            continue
+        candidate = img_el.get("src") or img_el.get("data-src")
+        if candidate:
+            image_url = _absolute(candidate)
+            break
+
+    # Prefer the page's self-declared canonical URL (the source slugs are
+    # purely cosmetic — the id is what the server keys on).
+    canonical_url = None
+    canonical_link = soup.select_one('link[rel="canonical"][href]')
+    if canonical_link:
+        canonical_url = canonical_link["href"].strip()
+    if not canonical_url:
+        og_url = soup.select_one('meta[property="og:url"][content]')
+        if og_url:
+            canonical_url = og_url["content"].strip()
+    detail_url = canonical_url or source_url
 
     event_id = None
-    if source_url:
-        event_id = _extract_event_id(urlparse(source_url).path)
+    for candidate in (canonical_url, source_url):
+        if candidate:
+            event_id = _extract_event_id(urlparse(candidate).path)
+            if event_id:
+                break
 
     return {
         "event_id": event_id,
@@ -262,7 +292,7 @@ def _parse_event_detail(html_text: str, source_url: Optional[str] = None) -> dic
         "short_description": short_description,
         "description": long_description,
         "image_url": image_url,
-        "detail_url": source_url,
+        "detail_url": detail_url,
     }
 
 
@@ -299,8 +329,18 @@ async def _fetch_events_page(
 async def _fetch_event_detail(
     session: aiohttp.ClientSession, url: str
 ) -> dict:
-    html_text = await _fetch_html(session, url)
-    return _parse_event_detail(html_text, source_url=url)
+    """Fetch a detail page, following redirects. The source rewrites
+    placeholder slugs (e.g. `event,179433.html`) to the canonical
+    `slug,id.html`, so we record the *final* URL — that's what callers want
+    in `detail_url`."""
+    async with session.get(
+        url, headers=_default_headers(),
+        timeout=REQUEST_TIMEOUT, allow_redirects=True,
+    ) as r:
+        r.raise_for_status()
+        html_text = await r.text()
+        final_url = str(r.url)
+    return _parse_event_detail(html_text, source_url=final_url)
 
 
 def _resolve_event_url(event_ref: str) -> str:

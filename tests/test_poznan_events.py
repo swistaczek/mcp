@@ -278,14 +278,30 @@ class TestDetailParser:
         # cleaned long description.
         assert "facebook" not in ev["description"].lower()
 
-    def test_image_url_absolute(self):
+    def test_image_url_extracted(self):
         ev = pe._parse_event_detail(self.html, self.url)
-        if ev["image_url"]:
-            assert ev["image_url"].startswith("https://www.poznan.pl/")
+        # The detail page always carries a hero image — we should find it.
+        assert ev["image_url"] is not None
+        assert ev["image_url"].startswith("https://www.poznan.pl/")
+        # Prefer the high-res variant (show2.jpg) over the thumbnail.
+        assert "show2" in ev["image_url"] or "with-dims" in ev["image_url"]
 
-    def test_detail_url_preserved(self):
+    def test_detail_url_uses_canonical(self):
+        # Detail pages declare their own canonical URL. We prefer it over the
+        # caller-supplied URL so round-tripped URLs are stable.
         ev = pe._parse_event_detail(self.html, self.url)
-        assert ev["detail_url"] == self.url
+        assert ev["detail_url"] == "https://www.poznan.pl/mim/events/-,179433.html"
+
+    def test_detail_url_falls_back_to_source(self):
+        # If the canonical link is absent, we keep the URL the caller used.
+        html_no_canonical = self.html.replace(
+            '<link rel="canonical" href="https://www.poznan.pl/mim/events/-,179433.html" />',
+            "",
+        )
+        ev = pe._parse_event_detail(html_no_canonical, self.url)
+        # Falls back through og:url first (also points at the dash-slug),
+        # then to the source URL only if both meta tags are missing.
+        assert ev["detail_url"].endswith(",179433.html")
 
 
 # ---------------------------------------------------------------------------
