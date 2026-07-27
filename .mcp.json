@@ -78,6 +78,12 @@
       "command": "sh",
       "args": ["-c", "uv run --with fastmcp fastmcp run poznan_events.fastmcp.json"],
       "env": {}
+    },
+    "Label Printer": {
+      "type": "stdio",
+      "command": "sh",
+      "args": ["-c", "uv run --with fastmcp fastmcp run label_printer.fastmcp.json"],
+      "env": {}
     }
   }
 }

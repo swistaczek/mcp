@@ -384,6 +384,86 @@ Scraper for the City of Poznań events calendar (`poznan.pl/mim/events/`) — th
 - "Sport events in Poznań" — `list_events(category="214")`
 - "Tell me about event 179433" — `get_event("179433")`
 
+### Label Printer Architecture
+Prints courier labels (InPost, DPD, DHL…) on direct-thermal label printers attached to the local machine. Ships as both a CLI (`python label_printer.py …`) and an MCP server from one module — `main()` sits behind an `if __name__ == "__main__"` guard so `fastmcp run` can import the module for its `mcp` object without argparse firing.
+
+**Verified against:** Zebra TLP2844 (USB, EPL2, 203 dpi) with 4×6" direct-thermal stock and real InPost labels.
+
+**Why the label is rendered here instead of by CUPS:**
+A thermal head is strictly 1-bit — a dot is burnt or it is not. Letting CUPS rasterise a PDF at 203 dpi anti-aliases thin strokes into grey, which `rastertolabel` then dithers into sparse dots; the print comes out visibly faint and barcodes scan poorly. Instead:
+
+1. `pdftoppm -gray -r 812` renders at 4× the device resolution
+2. A **box filter** downscales to the exact dot grid — each output dot is the true area average of the pixels it covers
+3. A hard threshold (default 200) maps that average to pure black or white, which *thickens* strokes rather than thinning them
+4. The result is written as a 1-bit PDF whose MediaBox equals the label exactly (4×6 in → 288×432 pt → 812×1218 dots), so CUPS has no reason to rescale
+
+Empirically this was the difference between "readable but pale" and solid black; `Darkness=30` alone was not enough.
+
+**macOS raw-queue restriction:**
+`lpadmin -m raw` fails on macOS 26 with `Raw queues are no longer supported on macOS`, which rules out hand-rolled EPL2 `GW` bitmaps over a raw queue. The server creates a **driver-backed** queue from the bundled sample drivers instead — `drv:///sample.drv/zebraep2.ppd` for EPL2-era Zebras, `zebra.ppd` for ZPL, `dymo.ppd` for Dymo. `lpadmin` warns that drivers are deprecated but still works.
+
+**Printer discovery:**
+`lpinfo -v` lists reachable devices (including ones with no queue yet), `lpstat -v`/`-p` list existing queues and their state; the two are merged on device URI so an installed printer appears once. Device URIs are matched against `THERMAL_MAKES` (Zebra, Dymo, TSC, Godex, Citizen, Bixolon, Sato, Argox, Intermec, Honeywell, Brother QL, Toshiba TEC, Seiko) so a thermal printer is told apart from an office laser. With exactly one detected printer the `printer` argument can be omitted everywhere.
+
+Zebra language detection keys off the model number: `TLP2844`/`LP2844`/`GK420`… are EPL2, but a `-Z` suffix means ZPL firmware on the same model number, so the regex excludes it.
+
+**Option filtering:**
+CUPS silently ignores an unsupported `-o`, so options are checked against `lpoptions -p <queue> -l` before use. `Darkness` and `zePrintRate` exist on Zebra PPDs but not on Dymo's — they are simply omitted there rather than assumed.
+
+**Tuned defaults** (established by printing real InPost labels and comparing):
+| Setting | Value | Reason |
+|---|---|---|
+| `threshold` | 200 | Anti-aliased stroke edges survive as solid black |
+| `margin_pt` | 8 | InPost artwork is 297×435 pt — wider than the 4.09" head; a full-bleed fit clips the printed frame |
+| `darkness` | 30 | Max burn energy; direct-thermal stock needs the top of the range |
+| `speed` | 1 in/s | Slowest travel = longest dwell per dot = darkest print |
+| `dpi` | 203 | TLP2844 head resolution |
+
+**Tools:**
+- `list_thermal_printers` — detected printers, whether each has a queue, its language and state
+- `print_label(file_path, printer?, label_size?, copies?, darkness?, speed?, threshold?, bold?, dry_run?)` — renders and submits; creates the CUPS queue on first use
+- `print_qr_code(data, printer?, module_dots?, error_correction?, caption?)` — encodes any value; routes to whichever transport is present
+- `get_printer_status(printer?)` — queue state + pending jobs
+- `cancel_print_jobs(printer?, job_id?)` — clear the queue
+
+**CLI:** `detect`, `status`, `install`, `render` (write the 1-bit PDF without printing — useful for inspecting output), `print`, `qr`, `cancel`. `--json` works on either side of the verb (the subparser copy uses `default=argparse.SUPPRESS` so it doesn't clobber the top-level value).
+
+**Label sizes:** presets (`4x6`, `4x4`, `4x3`, `2x1`, `a6`) or explicit dimensions (`100x150mm`, `4x6in`, `288x432pt`); a bare `WxH` is read as inches, matching how stock is sold. Zebra PPDs name media `w<width_pt>h<height_pt>`; when no listed size matches, a `Custom.<w>x<h>` fallback is used.
+
+**Orientation:** artwork whose orientation disagrees with the stock is rotated a quarter turn before fitting, so a landscape label still fills a portrait 4×6.
+
+**Second transport: ESC/POS over libusb** (`escpos_printer.py`)
+Cheap receipt printers (Winbond `0416:5011` and relatives, sold as Xprinter/Gprinter/Zjiang or unbranded) expose a USB printer-class interface but speak **ESC/POS**, which no bundled CUPS driver understands — CUPS lists the device and then has nothing to send it. These are driven directly over libusb instead. Discovery is by USB vendor/product id, since the devices identify themselves only as `Generic Bulk Device` with a placeholder serial, leaving the name-matching heuristic nothing to grip.
+
+Three constraints were established by trial against real hardware and are enforced in the module rather than left to callers:
+
+1. **Never exceed the head width.** An oversized raster does not error — it wedges the firmware until the printer is power-cycled. `raster_payload` raises instead, and `qr_image` shrinks the symbol to fit.
+2. **Send a page in exactly one write.** Banding the raster looks safer and is not: bulk USB already provides flow control (a full buffer NAKs and the host controller retries in hardware, inside the single transfer), whereas separate transfers leave gaps this firmware reads as the end of the raster, after which it errors and wedges. A 27 KB label sent as 24 paced bands died at band 5; the same bytes in one `GS v 0` command printed completely.
+3. **Rasterise QR codes.** The native `GS ( k` QR command is orders of magnitude cheaper on the wire (98 bytes vs 12 KB) but this firmware silently ignores it and prints nothing, so QR codes go through `segno` → bitmap → raster like any other image.
+
+The interface is also claimed explicitly (`claim_interface`): CUPS enumerates the same device and its usb backend probes periodically, which a short write survives by luck but a multi-second raster transfer does not.
+
+Note that `EscPosDevice` and the CUPS path share only the rendering idea — supersample, box-filter, threshold — not the code. That split is deliberate: the renderer produces a 1-bit bitmap, and the transport decides whether to wrap it in `GS v 0` or hand it to `lp`.
+
+**Verified against:** Winbond `0416:5011`, 58 mm continuous roll, 48 mm/384-dot printable width at 203 dpi (measured by printing a millimetre ruler, since the device reports nothing).
+
+**Known limitations:**
+- ESC/POS printers give no usable feedback: the IN endpoint is protocol 1 (unidirectional), so status queries go unanswered — paper-out and head-up cannot be detected
+- A wedged ESC/POS printer cannot be recovered over USB; `reset()` times out and only a power cycle helps
+- Base TLP2844 has a tear bar only — cutter and peeler are optional factory modules, and the CUPS EPL2 PPD exposes no cutter option (that would need an EPL2 `OC` command over a raw path macOS blocks)
+- 300 dpi thermal models need `DEFAULT_DPI` adjusted; nothing auto-detects head resolution
+- Requires `pdftoppm` (poppler) for PDF input; `bilevel=False` falls back to the CUPS raster path
+
+**Dependencies:**
+- `Pillow` — rasterised-page fitting, thresholding, 1-bit PDF output
+- `pdftoppm` (poppler, external) — PDF rasterisation
+- CUPS command-line tools (`lp`, `lpstat`, `lpinfo`, `lpoptions`, `lpadmin`, `cancel`)
+
+**Use Cases:**
+- "Print this InPost label" — `print_label(file_path="~/Downloads/label.pdf")`
+- "Print 3 copies darker" — `print_label(file_path=…, copies=3, threshold=235, bold=1)`
+- "Why didn't my label come out?" — `get_printer_status()`
+
 ### Image Descriptions Architecture
 Generates accessible descriptions for images and GIFs using Gemini LLM.
 
@@ -493,6 +573,33 @@ Tests are organized by functionality:
 - `TestDetailParser` — fixture-driven event detail page parsing
 - `TestLiveEndpoint` (marked `@pytest.mark.integration`) — live calls against poznan.pl
 
+**Label Printer Tests** (`tests/test_label_printer.py`):
+- `TestClassify` / `TestModelFromUri` — thermal-printer identification from device URIs, including the `-Z` ZPL-variant exclusion and rejection of office printers
+- `TestCupsParsers` — `lpinfo -v`, `lpstat -v`, `lpstat -p`, `lpoptions -l` output parsing from captured real output
+- `TestDiscovery` — device/queue merge, single-printer auto-selection, ambiguous and missing-printer errors
+- `TestQueueName` — CUPS-legal name sanitisation, queue reuse, `lpadmin` failure reporting
+- `TestLabelSize` / `TestPageSizeOption` — size parsing (presets, mm/in/pt) and PPD keyword selection with `Custom.` fallback
+- `TestFitGeometry` — scaling, centring, margin, and quarter-turn rotation
+- `TestBilevelConversion` — thresholding (not dithering), margin border, rotation onto portrait stock, bold dilation
+- `TestRenderLabel` — end-to-end rendering of the bundled InPost fixture to the 812×1218 device grid
+- `TestPrintFile` — `lp` command assembly, option filtering against the PPD, job-id parsing, failure handling
+- `TestCli` — exit codes and `--json` output
+- Integration tests marked `@pytest.mark.integration` — require an attached printer
+
+CUPS commands are faked from captured output; `pdftoppm` deliberately is **not** — the test double delegates any non-CUPS command to the real `subprocess`, so the rendering half of the pipeline stays honest. Tests needing poppler skip cleanly when it is absent.
+
+**ESC/POS Tests** (`tests/test_escpos_printer.py`):
+- `TestDeviceTable` — USB id table and dots→mm conversion
+- `TestFindPrinters` — known/unknown device filtering, unreadable serial
+- `TestRasterPayload` — `GS v 0` header encoding, **single command per image**, inverted bit polarity, byte padding, oversized/overtall/greyscale rejection
+- `TestFitToHead` — box-filter scaling and thresholding
+- `TestQrImage` — fits the paper width, module size clamped rather than overflowing, quiet zone, input validation
+- `TestTextPayload` — alignment codes, CP852 Polish characters, graceful degradation
+- `TestDevice` — interface claim, one-write-per-page, halt-clearing retry, power-cycle hints, cleanup on close
+- Integration test marked `@pytest.mark.integration` — needs an attached ESC/POS printer
+
+The USB layer is faked with `MagicMock`; `test_page_goes_out_as_one_transfer` pins the single-write invariant, which is the one behaviour that cannot be relaxed without wedging real hardware.
+
 **Plate Recognition Tests** (`tests/test_plate_recognition.py`):
 - `TestImageOptimization` - Image downscaling and RGB conversion
 - `TestPromptGeneration` - Prompt creation validation
@@ -508,6 +615,7 @@ Test fixtures:
 - `tests/fixtures/IMG_5134.heic` - iPhone photo with GPS data (Poznań, Poland)
 - `tests/fixtures/IMG_2852.heic` - iPhone photo without GPS data
 - `tests/fixtures/poznan_events_list.html` - Snapshot of the Poznań events homepage (20 cards + category nav)
+- `tests/fixtures/inpost_label_4x6.pdf` - InPost's public sample courier label (297×435 pt) used to exercise the rendering pipeline; contains no personal data
 - `tests/fixtures/poznan_event_detail.html` - Snapshot of a single Poznań event detail page
 
 ## FastMCP Documentation with Context7

@@ -109,6 +109,22 @@ City of Poznań events calendar (Co? Gdzie? Kiedy? — `poznan.pl/mim/events/`).
   - `get_event(event_ref)` — full detail (title, ISO date, time, place, categories, short + long description, hero image). Accepts numeric id, slug+id, path, or full URL
   - `list_event_categories` — catalog of category names with numeric ids (Sport=214, Muzyka=217, Sztuka=218, Teatr, Film, Książki, Dziecko, …)
 
+### Label Printer (`label_printer.py`)
+
+Prints courier labels (InPost, DPD, DHL…) on a direct-thermal label printer attached to this machine. Works as an MCP server *and* a standalone CLI.
+- **Tools**:
+  - `list_thermal_printers` — detects connected label printers, whether each has a CUPS queue, and its page-description language
+  - `print_label(file_path, printer?, label_size?, copies?, darkness?, speed?, threshold?, bold?, dry_run?)` — renders and prints a PDF or image; creates the CUPS queue on first use
+  - `print_qr_code(data, printer?, module_dots?, error_correction?, caption?)` — prints a QR code for any URL or text
+  - `get_printer_status(printer?)` — queue state and pending jobs
+  - `cancel_print_jobs(printer?, job_id?)` — clear the queue
+- **CLI**: `uv run python label_printer.py detect | status | install | render | print | qr | cancel` (add `--json` for machine-readable output)
+- **Two transports**: CUPS-backed label printers (Zebra EPL2/ZPL, Dymo) go through `lp`; cheap ESC/POS receipt printers, which no bundled CUPS driver can drive, are handled directly over libusb by `escpos_printer.py`. Both are listed together and picked automatically.
+- **Rendering**: thermal heads are 1-bit, so the label is rasterised at 4× resolution, box-filtered down to the exact dot grid, and hard-thresholded to pure black/white. Letting the print system dither an anti-aliased page instead produces visibly faint output with barcodes that scan poorly.
+- **Auto-detection**: with a single thermal printer attached, `printer` can be omitted everywhere. Zebra, Dymo, TSC, Godex, Citizen, Bixolon, Sato, Argox, Intermec, Honeywell, Brother QL, Toshiba TEC and Seiko devices are recognised.
+- **Requires**: `pdftoppm` (`brew install poppler`) for PDF input, plus the CUPS command-line tools. Verified on macOS with a Zebra TLP2844 (USB, EPL2, 203 dpi) and 4×6" stock.
+- **Usage**: "Print this InPost label" → `print_label(file_path="~/Downloads/label.pdf")`. Darker output → raise `threshold` (up to 254) or set `bold=1`.
+
 ### Domain Checker (`domains.py`)
 
 Batch domain registration check via WHOIS with DNS fallback and optional OVH browser-verified availability.
