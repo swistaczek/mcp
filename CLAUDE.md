@@ -525,6 +525,37 @@ Generates accessible descriptions for images and GIFs using Gemini LLM.
 - `google-generativeai`, `google-genai`, `Pillow`
 - FFmpeg (optional, for GIF support): `brew install ffmpeg`
 
+### Google Ads Planner Architecture
+Keyword research, demand forecasting and budget planning on top of the Google Ads API. Five read-only tools: `google_ads_keyword_metrics`, `google_ads_keyword_ideas`, `google_ads_forecast_budget`, `google_ads_budget_curve`, `google_ads_seasonality`.
+
+**REST over aiohttp, not the `google-ads` library:**
+The official `google-ads` Python client is a generated gRPC/protobuf stack — a heavy dependency tree (grpcio, protobuf, a pinned proto bundle per API version) and a **synchronous** surface that would have to be shoved onto a thread pool inside an async FastMCP tool. The same endpoints are available over REST as plain JSON, which the rest of this repo already speaks via `aiohttp`. So the server posts JSON directly to `https://googleads.googleapis.com/{version}/customers/{customer_id}:{method}` and uses `google-auth` for nothing but minting an OAuth access token. `google-auth` already arrives transitively via `google-genai`, but it is declared explicitly in `pyproject.toml` because this module imports it directly.
+
+**Auth — service account, no impersonation:**
+```python
+credentials = service_account.Credentials.from_service_account_info(
+    _decode_sa_key(os.getenv("GOOGLE_ADS_SERVICE_ACCOUNT_KEY_B64")),
+    scopes=["https://www.googleapis.com/auth/adwords"],
+)  # note: no `subject=` — we do NOT impersonate a domain user
+```
+Google's own docs push domain-wide delegation (`subject="user@yourdomain.com"`), which needs a Workspace domain and an admin-console grant. That is not used here. Instead the service account gets **direct access to the Ads account**: its `client_email` is added as a user in the Ads UI under **Admin → Access and security**, exactly like a human user. This works with any Ads account, Workspace or not, and is what was verified live. Two account ids are in play and they are not interchangeable — `GOOGLE_ADS_LOGIN_CUSTOMER_ID` (the manager/MCC) goes in the `login-customer-id` header, `GOOGLE_ADS_CUSTOMER_ID` (the client account being queried) goes in the URL path. Tokens are cached in-process and refreshed when within 60s of expiry.
+
+**The proto3-optional presence trap:**
+Every numeric field in `KeywordPlanHistoricalMetrics` is declared `optional` in the proto. In the REST/JSON encoding an unset optional field is **simply absent from the response object** — there is no `null`, no zero, no key at all. So `response["results"][i]["keywordIdeaMetrics"]` may legitimately have no `lowTopOfPageBidMicros`, no `highTopOfPageBidMicros`, no `competitionIndex`, and this is common for long-tail keywords with thin data.
+
+Absent must map to `None`, never to `0` / `0.0`. `dict.get(key, 0)` is the bug: it turns "Google has no bid data for this keyword" into "the top-of-page bid is $0.00", which then silently poisons every downstream average, opportunity score and budget curve. All coercion goes through `_micros_to_float`, which returns `None` for a missing value and only divides by 1e6 for a real one. (int64 fields also arrive as JSON *strings* and need an `int()` cast before the division.) This is the same class of bug as the "wrong object handed to a type-guarded helper" guardrail: nothing errors, the numbers just quietly become wrong.
+
+**Two different keyword caps — they are not the same limit:**
+- `generateKeywordIdeas` accepts at most **20 seed keywords**, and exactly one seed *kind* (keywords, URL, or site — never a mix).
+- `generateKeywordHistoricalMetrics` accepts up to **10,000 keywords** in one call.
+
+So "look up metrics for this list" and "expand this list" have wildly different batching strategies; over-stuffing the ideas seed is rejected client-side with a `ToolError` rather than burning a rate-limited request.
+
+**Rate limit:** the keyword planning endpoints are capped at **1 QPS per customer id**. `_post` enforces ≥1.1s spacing process-wide with an `asyncio.Lock` plus a monotonic clock, so tools cannot be fanned out concurrently. `google_ads_budget_curve` therefore sweeps its bid ladder sequentially and reports progress via `ctx.report_progress`.
+
+**API version is pinned explicitly** (`GOOGLE_ADS_API_VERSION`, default `v25`) because Google sunsets versions on a rolling schedule and a sunset version returns **404, not a deprecation warning**. v19, v20 and v21 are already dead; v22–v25 are live. Relying on an implicit "latest" would turn a Google-side sunset into a mystery 404. Version also changes response *shape*: v24 removed impressions and CTR from the forecast, so `google_ads_forecast_budget` returns clicks / cost / average CPC / conversions / average CPA only, and says so in a `note` field rather than fabricating the missing metrics.
+
+
 ## Testing Strategy
 
 Tests are organized by functionality:

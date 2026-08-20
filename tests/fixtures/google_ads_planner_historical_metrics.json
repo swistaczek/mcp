@@ -1,0 +1,151 @@
+{
+  "results": [
+    {
+      "text": "running shoes",
+      "keywordMetrics": {
+        "avgMonthlySearches": "301000",
+        "competition": "HIGH",
+        "competitionIndex": "100",
+        "lowTopOfPageBidMicros": "420000",
+        "highTopOfPageBidMicros": "2140000",
+        "monthlySearchVolumes": [
+          {
+            "year": "2024",
+            "month": "OCTOBER",
+            "monthlySearches": "246000"
+          },
+          {
+            "year": "2024",
+            "month": "NOVEMBER",
+            "monthlySearches": "301000"
+          },
+          {
+            "year": "2024",
+            "month": "DECEMBER",
+            "monthlySearches": "368000"
+          },
+          {
+            "year": "2025",
+            "month": "JANUARY",
+            "monthlySearches": "450000"
+          },
+          {
+            "year": "2025",
+            "month": "FEBRUARY",
+            "monthlySearches": "368000"
+          },
+          {
+            "year": "2025",
+            "month": "MARCH",
+            "monthlySearches": "301000"
+          },
+          {
+            "year": "2025",
+            "month": "APRIL",
+            "monthlySearches": "301000"
+          },
+          {
+            "year": "2025",
+            "month": "MAY",
+            "monthlySearches": "246000"
+          },
+          {
+            "year": "2025",
+            "month": "JUNE",
+            "monthlySearches": "246000"
+          },
+          {
+            "year": "2025",
+            "month": "JULY",
+            "monthlySearches": "201000"
+          },
+          {
+            "year": "2025",
+            "month": "AUGUST",
+            "monthlySearches": "246000"
+          },
+          {
+            "year": "2025",
+            "month": "SEPTEMBER",
+            "monthlySearches": "301000"
+          }
+        ]
+      },
+      "closeVariants": [
+        "running shoe",
+        "shoes for running"
+      ]
+    },
+    {
+      "text": "mkbhd merch",
+      "keywordMetrics": {
+        "avgMonthlySearches": "590",
+        "competition": "LOW",
+        "competitionIndex": "2",
+        "monthlySearchVolumes": [
+          {
+            "year": "2024",
+            "month": "OCTOBER",
+            "monthlySearches": "480"
+          },
+          {
+            "year": "2024",
+            "month": "NOVEMBER",
+            "monthlySearches": "590"
+          },
+          {
+            "year": "2024",
+            "month": "DECEMBER",
+            "monthlySearches": "720"
+          },
+          {
+            "year": "2025",
+            "month": "JANUARY",
+            "monthlySearches": "880"
+          },
+          {
+            "year": "2025",
+            "month": "FEBRUARY",
+            "monthlySearches": "720"
+          },
+          {
+            "year": "2025",
+            "month": "MARCH",
+            "monthlySearches": "590"
+          },
+          {
+            "year": "2025",
+            "month": "APRIL",
+            "monthlySearches": "590"
+          },
+          {
+            "year": "2025",
+            "month": "MAY",
+            "monthlySearches": "480"
+          },
+          {
+            "year": "2025",
+            "month": "JUNE",
+            "monthlySearches": "480"
+          },
+          {
+            "year": "2025",
+            "month": "JULY",
+            "monthlySearches": "390"
+          },
+          {
+            "year": "2025",
+            "month": "AUGUST",
+            "monthlySearches": "480"
+          },
+          {
+            "year": "2025",
+            "month": "SEPTEMBER",
+            "monthlySearches": "590"
+          }
+        ]
+      },
+      "closeVariants": []
+    }
+  ]
+}

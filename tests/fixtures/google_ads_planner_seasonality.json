@@ -1,0 +1,137 @@
+{
+  "results": [
+    {
+      "text": "running shoes",
+      "keywordMetrics": {
+        "avgMonthlySearches": "172",
+        "competition": "HIGH",
+        "competitionIndex": "100",
+        "lowTopOfPageBidMicros": "420000",
+        "highTopOfPageBidMicros": "2140000",
+        "monthlySearchVolumes": [
+          {
+            "year": "2024",
+            "month": "JANUARY",
+            "monthlySearches": "60"
+          },
+          {
+            "year": "2024",
+            "month": "FEBRUARY",
+            "monthlySearches": "70"
+          },
+          {
+            "year": "2024",
+            "month": "MARCH",
+            "monthlySearches": "80"
+          },
+          {
+            "year": "2024",
+            "month": "APRIL",
+            "monthlySearches": "90"
+          },
+          {
+            "year": "2024",
+            "month": "MAY",
+            "monthlySearches": "100"
+          },
+          {
+            "year": "2024",
+            "month": "JUNE",
+            "monthlySearches": "110"
+          },
+          {
+            "year": "2024",
+            "month": "JULY",
+            "monthlySearches": "120"
+          },
+          {
+            "year": "2024",
+            "month": "AUGUST",
+            "monthlySearches": "130"
+          },
+          {
+            "year": "2024",
+            "month": "SEPTEMBER",
+            "monthlySearches": "140"
+          },
+          {
+            "year": "2024",
+            "month": "OCTOBER",
+            "monthlySearches": "150"
+          },
+          {
+            "year": "2024",
+            "month": "NOVEMBER",
+            "monthlySearches": "160"
+          },
+          {
+            "year": "2024",
+            "month": "DECEMBER",
+            "monthlySearches": "170"
+          },
+          {
+            "year": "2025",
+            "month": "JANUARY",
+            "monthlySearches": "120"
+          },
+          {
+            "year": "2025",
+            "month": "FEBRUARY",
+            "monthlySearches": "140"
+          },
+          {
+            "year": "2025",
+            "month": "MARCH",
+            "monthlySearches": "160"
+          },
+          {
+            "year": "2025",
+            "month": "APRIL",
+            "monthlySearches": "180"
+          },
+          {
+            "year": "2025",
+            "month": "MAY",
+            "monthlySearches": "200"
+          },
+          {
+            "year": "2025",
+            "month": "JUNE",
+            "monthlySearches": "220"
+          },
+          {
+            "year": "2025",
+            "month": "JULY",
+            "monthlySearches": "240"
+          },
+          {
+            "year": "2025",
+            "month": "AUGUST",
+            "monthlySearches": "260"
+          },
+          {
+            "year": "2025",
+            "month": "SEPTEMBER",
+            "monthlySearches": "280"
+          },
+          {
+            "year": "2025",
+            "month": "OCTOBER",
+            "monthlySearches": "300"
+          },
+          {
+            "year": "2025",
+            "month": "NOVEMBER",
+            "monthlySearches": "320"
+          },
+          {
+            "year": "2025",
+            "month": "DECEMBER",
+            "monthlySearches": "340"
+          }
+        ]
+      },
+      "closeVariants": []
+    }
+  ]
+}
