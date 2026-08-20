@@ -700,7 +700,7 @@ class TestGifUploadAndGeneration:
             result = await gemini_alt.generate_description_for_gif(
                 mock_video_file,
                 context=None,
-                model_name="gemini-2.0-flash",
+                model_name="gemini-3.7-flash",
                 ctx=ctx
             )
 
