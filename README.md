@@ -130,6 +130,115 @@ Prints courier labels (InPost, DPD, DHL…) on a direct-thermal label printer at
 Batch domain registration check via WHOIS with DNS fallback and optional OVH browser-verified availability.
 - **Tool**: `check_domains` (up to 50 domains, 50+ TLDs incl. .com.cn and Chinese IDN)
 
+### Google Ads Planner (`google_ads_planner.py`)
+
+Keyword research, demand forecasting and budget planning against the Google Ads API (v25, REST).
+- **Tools**:
+  - `google_ads_keyword_metrics(keywords, geo_target_ids?, language_id?, network?, start_year_month?, end_year_month?)` — "how much demand is there for these exact terms?" Historical average monthly searches, competition band + index, top-of-page bid range, and the month-by-month volume series. Up to 10,000 keywords per call.
+  - `google_ads_keyword_ideas(seed_keywords? | seed_url? | seed_site?, geo_target_ids?, language_id?, network?, limit?)` — "what else should we be targeting?" Expands one seed kind (max **20** seed keywords, or a single URL/site) into related keywords, each scored with an `opportunity_score` (volume ÷ competition), plus ready-made `top_by_volume`, `top_opportunities` and `easy_targets` (LOW/MEDIUM competition) buckets.
+  - `google_ads_forecast_budget(keywords, match_type?, max_cpc_bid, daily_budget?, start_date?, end_date?, …)` — "what would this cost and what would we get?" Forward-looking forecast for a hypothetical campaign: clicks, cost, average CPC, conversions, average CPA.
+  - `google_ads_budget_curve(keywords, match_type?, bids?, …)` — "where does spending more stop paying off?" Sweeps the forecast across a bid ladder (default `0.25 … 8.00`, max 10 points), computes marginal clicks / marginal cost / marginal cost-per-click between consecutive points, and picks the `best_efficiency_bid`.
+  - `google_ads_seasonality(keywords, months_back?, geo_target_ids?, language_id?)` — "when in the year should we spend?" Up to 48 months of history normalised into a monthly index (1.0 = average month), with peak/trough months per keyword and in aggregate, plus year-over-year change.
+- **Defaults**: geo `2840` (USA), language `1000` (English), network `GOOGLE_SEARCH`. UK is `2826`, Canada `2124`; Spanish `1003`, French `1002`.
+- **Setup**: see [Google Ads Planner setup](#google-ads-planner-setup) below — credentials come from 1Password, not from files.
+- **Caveats**:
+  - **A Basic-access-tier developer token is required.** Test and Explorer tier tokens *cannot* call the keyword planning endpoints at all — they fail regardless of the account or the query. Apply for Basic access in your manager account's API Center.
+  - **Keyword planning is rate-limited to 1 QPS per customer id.** The server serialises and paces every request itself, so a `google_ads_budget_curve` over six bids takes ~7s of wall clock by design. Don't fan these tools out in parallel.
+  - **The v25 forecast returns no impressions and no CTR** — those fields were removed in v24. You get clicks, cost, average CPC, conversions and average CPA only; impression share and click-through rate cannot be derived from it.
+  - **Absent numbers mean "no data", not zero.** Bid and competition fields are frequently missing for long-tail keywords and come back as `null` — don't read them as $0.00 or as zero competition.
+- **Source**: `googleads.googleapis.com` REST endpoints under `customers/{id}:generateKeywordHistoricalMetrics` / `:generateKeywordIdeas` / `:generateKeywordForecastMetrics`.
+
+
+## Google Ads Planner setup
+
+The server reads four environment variables. **Nothing secret is stored in this repo** —
+`.mcp.json` holds only 1Password *references*, and `op run` resolves them at launch.
+
+| Variable | What it is |
+| --- | --- |
+| `GOOGLE_ADS_DEVELOPER_TOKEN` | API token from your manager account's API Center |
+| `GOOGLE_ADS_SERVICE_ACCOUNT_KEY_B64` | base64 of the GCP service-account JSON key |
+| `GOOGLE_ADS_LOGIN_CUSTOMER_ID` | manager (MCC) account id, digits only |
+| `GOOGLE_ADS_CUSTOMER_ID` | the client account actually queried, digits only |
+| `GOOGLE_ADS_API_VERSION` | optional, defaults to `v25` |
+
+### 1. Get a developer token (Basic tier)
+
+Only a **manager (MCC)** account can issue one. In the MCC: **Tools & Settings → Setup →
+API Center** (<https://ads.google.com/aw/apicenter>). Apply for **Basic access** — new
+tokens start on Explorer tier, which cannot call keyword planning at all, and Test tier
+only works against test accounts. Approval is manual, typically 1–3 business days.
+
+### 2. Create the service account
+
+Auth is a GCP service account with **no impersonation** (no domain-wide delegation, no
+Workspace admin needed). Create a JSON key, then add the service account's email as a
+user on the Ads account under **Admin → Access and security**. Encode the key:
+
+```bash
+base64 -i service-account.json | tr -d '\n'
+```
+
+### 3. Store the credentials in 1Password
+
+Create one API Credential item — the reference implementation lives in the `Startupkit`
+vault as **Google Ads MCP**:
+
+| Field | Contents |
+| --- | --- |
+| `credential` | developer token |
+| `ads_manager_account_id` | MCC id |
+| `company_account_id` | client account id |
+| `Service Account` → `SERVICE_ACCOUNT_KEY_B64` | the base64 blob from step 2 |
+
+> **Item titles must not contain `(`, `)` or other punctuation** — `op://` secret
+> references reject them with `invalid character in secret reference`. Stick to letters,
+> digits, spaces and hyphens.
+
+Verify each reference resolves before wiring it up:
+
+```bash
+op read "op://Startupkit/Google Ads MCP/credential"
+```
+
+### 4. Launch
+
+`.mcp.json` already wraps the server in `op run`, so Claude Code picks it up with no
+further setup as long as you have an active `op` session (`op signin`):
+
+```json
+"args": ["-c", "op run --no-masking -- uv run --with fastmcp fastmcp run google_ads_planner.fastmcp.json"],
+"env": {
+  "GOOGLE_ADS_DEVELOPER_TOKEN": "op://Startupkit/Google Ads MCP/credential"
+}
+```
+
+`--no-masking` is **required**, not optional. `op run` otherwise scans stdout and
+replaces anything resembling a secret with `<concealed>` — and for a stdio MCP server
+stdout *is* the JSON-RPC channel, so masking can corrupt the protocol stream.
+
+To point at a different vault or item, edit the `op://` references in `.mcp.json`; they
+are not secrets and are safe to commit.
+
+### Running outside Claude Code
+
+Same mechanism, driven from a dotenv file of references:
+
+```bash
+cat > .env.google-ads <<'EOF'
+GOOGLE_ADS_DEVELOPER_TOKEN=op://Startupkit/Google Ads MCP/credential
+GOOGLE_ADS_SERVICE_ACCOUNT_KEY_B64=op://Startupkit/Google Ads MCP/Service Account/SERVICE_ACCOUNT_KEY_B64
+GOOGLE_ADS_LOGIN_CUSTOMER_ID=op://Startupkit/Google Ads MCP/ads_manager_account_id
+GOOGLE_ADS_CUSTOMER_ID=op://Startupkit/Google Ads MCP/company_account_id
+EOF
+
+op run --no-masking --env-file=.env.google-ads -- mise run dev google_ads_planner.fastmcp.json
+```
+
+`.env*` is gitignored. If you genuinely cannot use 1Password, plain values in `.env`
+work too — but never put them in `.mcp.json`, which *is* committed.
+
+
 ## Development
 
 ```bash

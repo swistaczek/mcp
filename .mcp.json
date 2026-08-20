@@ -84,6 +84,20 @@
       "command": "sh",
       "args": ["-c", "uv run --with fastmcp fastmcp run label_printer.fastmcp.json"],
       "env": {}
+    },
+    "Google Ads Planner": {
+      "type": "stdio",
+      "command": "sh",
+      "args": [
+        "-c",
+        "op run --no-masking -- uv run --with fastmcp fastmcp run google_ads_planner.fastmcp.json"
+      ],
+      "env": {
+        "GOOGLE_ADS_DEVELOPER_TOKEN": "op://Startupkit/Google Ads MCP/credential",
+        "GOOGLE_ADS_SERVICE_ACCOUNT_KEY_B64": "op://Startupkit/Google Ads MCP/Service Account/SERVICE_ACCOUNT_KEY_B64",
+        "GOOGLE_ADS_LOGIN_CUSTOMER_ID": "op://Startupkit/Google Ads MCP/ads_manager_account_id",
+        "GOOGLE_ADS_CUSTOMER_ID": "op://Startupkit/Google Ads MCP/company_account_id"
+      }
     }
   }
 }

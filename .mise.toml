@@ -63,10 +63,34 @@ for s in gemini_image_descriptions plate_recognition; do
 done
 '''
 
+# Google Ads Planner takes four credentials, so it registers separately.
+# Only op:// references are stored in the Claude config — `op run` resolves them
+# at launch, so no secret is ever written to disk. Requires an active `op` session.
+[tasks.claude-install-google-ads]
+description = "Register the Google Ads Planner server. Requires 1Password CLI (op signin)."
+run = '''
+set -e
+if ! op whoami >/dev/null 2>&1; then
+  echo "1Password CLI is not signed in — run 'op signin' first" >&2
+  exit 1
+fi
+item="op://Startupkit/Google Ads MCP"
+claude mcp remove google_ads_planner -s user 2>/dev/null || true
+claude mcp add google_ads_planner -s user \
+  -e "GOOGLE_ADS_DEVELOPER_TOKEN=$item/credential" \
+  -e "GOOGLE_ADS_SERVICE_ACCOUNT_KEY_B64=$item/Service Account/SERVICE_ACCOUNT_KEY_B64" \
+  -e "GOOGLE_ADS_LOGIN_CUSTOMER_ID=$item/ads_manager_account_id" \
+  -e "GOOGLE_ADS_CUSTOMER_ID=$item/company_account_id" \
+  -- op run --no-masking -- \
+  "$MISE_PROJECT_ROOT/.venv/bin/python" \
+  "$MISE_PROJECT_ROOT/google_ads_planner.py"
+echo "registered: google_ads_planner"
+'''
+
 [tasks.claude-uninstall]
 description = "Remove all servers in this repo from Claude Code (user scope)"
 run = '''
-for s in czynaczas tablica exif_extractor domains gazetki krs gemini_image_descriptions plate_recognition; do
+for s in czynaczas tablica exif_extractor domains gazetki krs gemini_image_descriptions plate_recognition google_ads_planner; do
   claude mcp remove "$s" -s user 2>/dev/null && echo "removed: $s" || true
 done
 '''
