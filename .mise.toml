@@ -70,11 +70,13 @@ done
 description = "Register the Google Ads Planner server. Requires 1Password CLI (op signin)."
 run = '''
 set -e
-if ! op whoami >/dev/null 2>&1; then
-  echo "1Password CLI is not signed in — run 'op signin' first" >&2
+item="op://Startupkit/Google Ads MCP"
+# Probe an actual read rather than `op whoami` — with the 1Password desktop-app
+# integration `op read` works fine while `op whoami` still reports "not signed in".
+if ! op read "$item/ads_manager_account_id" >/dev/null 2>&1; then
+  echo "Cannot read from 1Password — unlock the desktop app or run 'op signin'" >&2
   exit 1
 fi
-item="op://Startupkit/Google Ads MCP"
 claude mcp remove google_ads_planner -s user 2>/dev/null || true
 claude mcp add google_ads_planner -s user \
   -e "GOOGLE_ADS_DEVELOPER_TOKEN=$item/credential" \
