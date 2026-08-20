@@ -18,6 +18,7 @@ import datetime as dt
 import importlib
 import inspect
 import json
+import os
 import re
 import time
 from pathlib import Path
@@ -83,14 +84,19 @@ SEASONALITY_RESPONSE = _fixture("seasonality")
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(autouse=True)
-def gads(monkeypatch):
+def gads(monkeypatch, request):
     """Module reloaded with credentials in the env before every test.
 
     Reloading also resets module-level state (token cache, throttle clock) so
     tests can't bleed into each other.
+
+    Integration tests are exempt from the fake credentials — they need whatever
+    real values are in the ambient environment, and stamping placeholders over
+    them would make the live suite unrunnable.
     """
-    for key, value in ENV.items():
-        monkeypatch.setenv(key, value)
+    if request.node.get_closest_marker("integration") is None:
+        for key, value in ENV.items():
+            monkeypatch.setenv(key, value)
     importlib.reload(google_ads_planner)
     return google_ads_planner
 
@@ -1408,6 +1414,11 @@ class TestThrottle:
 # ---------------------------------------------------------------------------
 
 @pytest.mark.integration
+@pytest.mark.skipif(
+    os.getenv("GOOGLE_ADS_DEVELOPER_TOKEN", "test-developer-token")
+    == "test-developer-token",
+    reason="Real Google Ads credentials required for integration test"
+)
 class TestLiveAPI:
     @pytest.mark.asyncio
     async def test_historical_metrics_for_a_known_keyword(self):
