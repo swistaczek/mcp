@@ -1,0 +1,487 @@
+{
+  "challenge": {
+    "domain": "catch.dev",
+    "status": 400,
+    "body": {
+      "class": "Client::BadRequest::ChallengeRequired",
+      "message": "Bad Request",
+      "body": {
+        "payload": "https://auth.eu.ovhcloud.com/challenge/web?id=REDACTED",
+        "type": "url"
+      }
+    }
+  },
+  "transfer_premium": {
+    "domain": "catch.dev",
+    "status": 200,
+    "body": [
+      {
+        "action": "transfer",
+        "configurations": [],
+        "currentNameservers": [
+          "april.ns.cloudflare.com",
+          "cullen.ns.cloudflare.com"
+        ],
+        "deliveryTime": "",
+        "duration": [
+          "P1Y"
+        ],
+        "isAuthInfoRequired": true,
+        "isTransferLocked": true,
+        "offer": "gold",
+        "offerId": "dev",
+        "orderable": true,
+        "phase": "ga",
+        "prices": [
+          {
+            "label": "PRICE",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "1430.16 zł",
+              "value": 1430.16
+            }
+          },
+          {
+            "label": "RENEW",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "1430.16 zł",
+              "value": 1430.16
+            }
+          },
+          {
+            "label": "DISCOUNT",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "0.00 zł",
+              "value": 0
+            }
+          },
+          {
+            "label": "FEE",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "0.00 zł",
+              "value": 0
+            }
+          },
+          {
+            "label": "TOTAL",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "1430.16 zł",
+              "value": 1430.16
+            }
+          }
+        ],
+        "pricingMode": "transfer-premium",
+        "productId": "domain",
+        "quantityMax": 1,
+        "recommendedDuration": "P1Y",
+        "transfer": {
+          "conditions": [
+            {
+              "arguments": [],
+              "code": "registrarLock",
+              "description": "The domain is locked at its current registrar. Ask them to remove the lock."
+            },
+            {
+              "arguments": [],
+              "code": "authInfoRequired",
+              "description": "A transfer authorization code is required to transfer this domain."
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "transfer_aftermarket1": {
+    "domain": "gimmick.com",
+    "status": 200,
+    "body": [
+      {
+        "action": "transfer",
+        "configurations": [],
+        "deliveryTime": "",
+        "duration": [
+          "P1Y"
+        ],
+        "isTransferLocked": false,
+        "offer": "gold",
+        "offerId": "com",
+        "orderable": true,
+        "phase": "ga",
+        "prices": [
+          {
+            "label": "PRICE",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "1320793.47 zł",
+              "value": 1320793.47
+            }
+          },
+          {
+            "label": "RENEW",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "62.49 zł",
+              "value": 62.49
+            }
+          },
+          {
+            "label": "DISCOUNT",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "0.00 zł",
+              "value": 0
+            }
+          },
+          {
+            "label": "FEE",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "0.00 zł",
+              "value": 0
+            }
+          },
+          {
+            "label": "TOTAL",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "1320793.47 zł",
+              "value": 1320793.47
+            }
+          }
+        ],
+        "pricingMode": "transfer-aftermarket1",
+        "productId": "domain",
+        "quantityMax": 1,
+        "recommendedDuration": "P1Y"
+      }
+    ]
+  },
+  "create_premium": {
+    "domain": "catch.design",
+    "status": 200,
+    "body": [
+      {
+        "action": "create",
+        "configurations": [],
+        "deliveryTime": "",
+        "duration": [
+          "P1Y"
+        ],
+        "isTransferLocked": false,
+        "offer": "gold",
+        "offerId": "design",
+        "orderable": true,
+        "phase": "ga",
+        "prices": [
+          {
+            "label": "PRICE",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "460.34 zł",
+              "value": 460.34
+            }
+          },
+          {
+            "label": "RENEW",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "460.34 zł",
+              "value": 460.34
+            }
+          },
+          {
+            "label": "DISCOUNT",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "0.00 zł",
+              "value": 0
+            }
+          },
+          {
+            "label": "FEE",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "0.00 zł",
+              "value": 0
+            }
+          },
+          {
+            "label": "TOTAL",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "460.34 zł",
+              "value": 460.34
+            }
+          }
+        ],
+        "pricingMode": "create-premium",
+        "productId": "domain",
+        "quantityMax": 1,
+        "recommendedDuration": "P1Y",
+        "transfer": {
+          "conditions": [
+            {
+              "arguments": [],
+              "code": "domainAvailable",
+              "description": "The domain is available for registration, it cannot be transferred."
+            },
+            {
+              "arguments": [],
+              "code": "authInfoRequired",
+              "description": "A transfer authorization code is required to transfer this domain."
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "create_default": {
+    "domain": "zxqv-nonexistent-8812.com",
+    "status": 200,
+    "body": [
+      {
+        "action": "create",
+        "configurations": [],
+        "deliveryTime": "",
+        "duration": [
+          "P1Y",
+          "P2Y",
+          "P3Y",
+          "P4Y",
+          "P5Y",
+          "P6Y",
+          "P7Y",
+          "P8Y",
+          "P9Y",
+          "P10Y"
+        ],
+        "isTransferLocked": false,
+        "offer": "gold",
+        "offerId": "com",
+        "orderable": true,
+        "phase": "ga",
+        "prices": [
+          {
+            "label": "PRICE",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "34.08 zł",
+              "value": 34.08
+            }
+          },
+          {
+            "label": "RENEW",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "62.49 zł",
+              "value": 62.49
+            }
+          },
+          {
+            "label": "DISCOUNT",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "0.00 zł",
+              "value": 0
+            }
+          },
+          {
+            "label": "FEE",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "0.00 zł",
+              "value": 0
+            }
+          },
+          {
+            "label": "TOTAL",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "34.08 zł",
+              "value": 34.08
+            }
+          }
+        ],
+        "pricingMode": "create-default",
+        "productId": "domain",
+        "quantityMax": 1,
+        "recommendedDuration": "P2Y",
+        "transfer": {
+          "conditions": [
+            {
+              "arguments": [],
+              "code": "domainAvailable",
+              "description": "The domain is available for registration, it cannot be transferred."
+            },
+            {
+              "arguments": [],
+              "code": "authInfoRequired",
+              "description": "A transfer authorization code is required to transfer this domain."
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "transfer_default": {
+    "domain": "erne.dev",
+    "status": 200,
+    "body": [
+      {
+        "action": "transfer",
+        "configurations": [],
+        "currentNameservers": [
+          "ns1.vercel-dns.com",
+          "ns2.vercel-dns.com"
+        ],
+        "deliveryTime": "",
+        "duration": [
+          "P1Y"
+        ],
+        "isAuthInfoRequired": true,
+        "isTransferLocked": true,
+        "offer": "gold",
+        "offerId": "dev",
+        "orderable": true,
+        "phase": "ga",
+        "prices": [
+          {
+            "label": "PRICE",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "74.49 zł",
+              "value": 74.49
+            }
+          },
+          {
+            "label": "RENEW",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "74.49 zł",
+              "value": 74.49
+            }
+          },
+          {
+            "label": "DISCOUNT",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "0.00 zł",
+              "value": 0
+            }
+          },
+          {
+            "label": "FEE",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "0.00 zł",
+              "value": 0
+            }
+          },
+          {
+            "label": "TOTAL",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "74.49 zł",
+              "value": 74.49
+            }
+          }
+        ],
+        "pricingMode": "transfer-default",
+        "productId": "domain",
+        "quantityMax": 1,
+        "recommendedDuration": "P1Y",
+        "transfer": {
+          "conditions": [
+            {
+              "arguments": [],
+              "code": "registrarLock",
+              "description": "The domain is locked at its current registrar. Ask them to remove the lock."
+            },
+            {
+              "arguments": [],
+              "code": "authInfoRequired",
+              "description": "A transfer authorization code is required to transfer this domain."
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "check_failed": {
+    "domain": "erne.eu",
+    "status": 400,
+    "body": {
+      "class": "Client::BadRequest",
+      "message": "Some parameters are invalid in the request: check failed"
+    }
+  },
+  "transfer_aftermarket2": {
+    "domain": "erne.pl",
+    "status": 200,
+    "body": [
+      {
+        "action": "transfer",
+        "configurations": [],
+        "deliveryTime": "",
+        "duration": [
+          "P1Y"
+        ],
+        "isTransferLocked": false,
+        "offer": "gold",
+        "offerId": "pl",
+        "orderable": true,
+        "phase": "ga",
+        "prices": [
+          {
+            "label": "PRICE",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "43436.15 zł",
+              "value": 43436.15
+            }
+          },
+          {
+            "label": "RENEW",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "58.99 zł",
+              "value": 58.99
+            }
+          },
+          {
+            "label": "DISCOUNT",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "0.00 zł",
+              "value": 0
+            }
+          },
+          {
+            "label": "FEE",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "0.00 zł",
+              "value": 0
+            }
+          },
+          {
+            "label": "TOTAL",
+            "price": {
+              "currencyCode": "PLN",
+              "text": "43436.15 zł",
+              "value": 43436.15
+            }
+          }
+        ],
+        "pricingMode": "transfer-aftermarket2",
+        "productId": "domain",
+        "quantityMax": 1,
+        "recommendedDuration": "P1Y"
+      }
+    ]
+  }
+}
