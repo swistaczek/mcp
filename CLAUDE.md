@@ -53,18 +53,26 @@ Multi-layer domain availability verification with optional OVH browser-based val
 - `verify_available: bool = False` - Enable OVH verification for available results
 
 **OVH Verification Module** (`ovh_verifier.py`):
-- Browser-based domain availability check using OVH's web interface
-- Bypasses OVH API bot protection via Playwright automation
+- Browser-based domain availability check using OVH's order page
+- Types each domain into the search box so the page's own JavaScript solves OVH's bot challenge, then reads the verdict from the JSON the page fetches — not from the rendered table
 - Provides pricing information for available domains
 - Catches false positives: domains reported available by DNS but actually registered
 - **Detects aftermarket/premium domains**: Distinguishes between standard registration and secondary market
 
-**Aftermarket Detection:**
-OVH displays domain type labels that indicate aftermarket/resale domains:
-- **"Premium"** - Premium domains sold at higher prices
-- **"Sprzedaż przez stronę trzecią"** - Third-party sales (external marketplace)
+**How the verdict is read:**
+The order page checks every domain via `GET /engine/api/v1/order/cart/{cart_id}/domain?domain=…`. The first call usually answers `400 Client::BadRequest::ChallengeRequired`; the page solves the challenge and retries, so calling the endpoint directly from Python does not work. The verifier listens to the page's responses (`page.on("response")`), skips challenge replies and redirects, and parses the final one. One search fans out to ~30 suggestion checks; every response is cached, so later domains in a batch are often answered without a new search.
 
-The verifier parses these labels and marks such domains as NOT available for standard registration.
+The table was the previous data source and broke when OVH redesigned it (search box `mojadomena.pl` → `Zarejestruj domenę`, every lookup timing out). The JSON contract is what the page itself depends on.
+
+**Aftermarket Detection** — `pricingMode` in the check response:
+| `pricingMode` | Meaning | UI label | Result |
+|---|---|---|---|
+| `create-default` | Standard registration | Dostępny | available |
+| `create-premium` | Registry premium | Premium | aftermarket (`Premium`) |
+| `transfer-aftermarket1`, `transfer-aftermarket2` | Resale by a third party | Sprzedaż przez stronę trzecią | aftermarket (`Sprzedaż przez stronę trzecią`) |
+| `transfer-default`, `transfer-premium` | Registered, transfer only | Transfer | registered |
+
+Aftermarket domains are marked as NOT available for standard registration. `.eu` cannot be checked through this flow — OVH answers `400 check failed`, surfaced as an unverified result.
 
 **Verification Flow:**
 ```python
@@ -72,7 +80,7 @@ The verifier parses these labels and marks such domains as NOT available for sta
 2. If WHOIS fails → DNS fallback (⚠️ potential false positives)
 3. If verify_available=True and domain appears available:
    → OVH browser verification checks availability
-   → Detects aftermarket labels (Premium, third-party)
+   → Detects aftermarket via pricingMode (Premium, third-party)
    → Aftermarket domains marked as NOT available
    → False positives flagged if OVH says registered
 ```
@@ -85,14 +93,14 @@ The verifier parses these labels and marks such domains as NOT available for sta
       "registered": false,
       "available": false,
       "method": "dns",
-      "reason": "AFTERMARKET: Domain on secondary market (Premium) - 1 384,70 zł",
+      "reason": "AFTERMARKET: Domain on secondary market (Premium) - 1384.70 zł",
       "aftermarket": true,
       "aftermarket_type": "Premium",
-      "aftermarket_price": "1 384,70 zł",
+      "aftermarket_price": "1384.70 zł",
       "ovh_verification": {
         "ovh_available": false,
         "ovh_verified": true,
-        "ovh_price": "1 384,70 zł",
+        "ovh_price": "1384.70 zł",
         "ovh_price_type": "premium",
         "ovh_is_aftermarket": true,
         "ovh_aftermarket_type": "Premium",
@@ -103,13 +111,13 @@ The verifier parses these labels and marks such domains as NOT available for sta
       "registered": false,
       "available": true,
       "method": "dns",
-      "reason": "OVH CONFIRMED available (23,39 zł)",
+      "reason": "OVH CONFIRMED available (23.39 zł)",
       "ovh_confirmed": true,
-      "standard_price": "23,39 zł",
+      "standard_price": "23.39 zł",
       "ovh_verification": {
         "ovh_available": true,
         "ovh_verified": true,
-        "ovh_price": "23,39 zł",
+        "ovh_price": "23.39 zł",
         "ovh_price_type": "standard",
         "ovh_is_aftermarket": false,
         "ovh_aftermarket_type": null,
@@ -139,14 +147,15 @@ The verifier parses these labels and marks such domains as NOT available for sta
 - `failed_domains` - Check failed (unsupported TLD, network error)
 
 **Dependencies:**
-- `playwright` - Browser automation (optional, for OVH verification)
+- `playwright` - Browser automation for OVH verification (bundled Chromium, or an installed Google Chrome as fallback)
 - `socket` - DNS resolution
 - `asyncio` - Async WHOIS queries
 
 **Known Limitations:**
 - DNS fallback has high false positive rate for .dev/.app TLDs (domains can be registered without DNS records)
-- OVH verification is slower (~2-3s per domain) but more accurate
-- OVH verification requires Playwright installation: `pip install playwright && python -m playwright install chromium`
+- OVH verification is slower (~1-2s per domain plus ~5s browser start) but more accurate
+- OVH verification needs a browser: `uv run playwright install chromium`, or an installed Google Chrome is used automatically
+- `.eu` domains cannot be verified by OVH (`400 check failed`)
 - Aftermarket prices can be 10-100x standard registration prices
 
 ### Tablica Rejestracyjna PL Architecture
@@ -566,6 +575,12 @@ Tests are organized by functionality:
 - `TestNotFoundPatterns` - WHOIS response parsing
 - `TestWHOISServerMapping` - Server configuration validation
 - `TestOVHVerificationIntegration` - OVH verification response structures, false positive detection, summary formatting
+
+**OVH Verifier Tests** (`tests/test_ovh_verifier.py`):
+- `TestCheckedDomain` — cart-check URL recognition, case/IDN normalisation, other endpoints ignored
+- `TestIsChallenge` — bot-challenge reply told apart from `check failed`
+- `TestParseCheckResponse` — every observed `pricingMode` mapped to available / aftermarket / registered, plus unverifiable and malformed replies
+- `TestVerifyDomain` — search → wait → parse flow against a fake page: challenge then retry, cached suggestion skips the search, redirects ignored, timeout
 - Integration tests marked with `@pytest.mark.skip` (require mocking)
 
 **Tablica Tests** (`tests/test_tablica.py`):
@@ -641,6 +656,7 @@ The USB layer is faked with `MagicMock`; `test_page_goes_out_as_one_transfer` pi
 
 Test fixtures:
 - `tests/fixtures/whois_responses.json` - Sample WHOIS responses
+- `tests/fixtures/ovh_cart_domain_responses.json` - Real OVH cart-check replies, one per `pricingMode` plus challenge and `check failed` (promotions and challenge id stripped)
 - `tests/fixtures/*.png` - Test images for alt tag generation
 - `tests/fixtures/example.gif` - Animated GIF for GIF description testing
 - `tests/fixtures/IMG_5134.heic` - iPhone photo with GPS data (Poznań, Poland)
