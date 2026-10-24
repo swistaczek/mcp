@@ -14,7 +14,7 @@ from typing import Any, Optional
 import aiohttp
 import pillow_heif
 from fastmcp import FastMCP, Context
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools import ToolResult
 from PIL import Image
 from PIL.ExifTags import TAGS, GPSTAGS
 from pydantic import Field

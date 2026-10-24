@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Any, Iterable, Optional
 
 from fastmcp import FastMCP
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools import ToolResult
 from PIL import Image, ImageFilter
 from pydantic import Field
 

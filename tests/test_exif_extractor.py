@@ -15,8 +15,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import exif_extractor
 
-# Get the underlying function from the wrapped tool
-_analyze_image_metadata = exif_extractor.analyze_image_metadata.fn
+# FastMCP decorators return the original function, so call it directly
+_analyze_image_metadata = exif_extractor.analyze_image_metadata
 
 
 class TestConvertToDegrees:

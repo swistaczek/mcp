@@ -56,7 +56,7 @@ from typing import Any, Optional
 import aiohttp
 from fastmcp import Context, FastMCP
 from fastmcp.exceptions import ToolError
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools import ToolResult
 from google.auth.transport.requests import Request as GoogleAuthRequest
 from google.oauth2.service_account import Credentials
 from pydantic import Field
