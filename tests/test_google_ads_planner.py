@@ -141,11 +141,8 @@ def _patch_token(monkeypatch, module, token: str = FAKE_TOKEN) -> str:
 
 async def _run(module, tool_name: str, arguments: dict):
     """Invoke a tool through FastMCP so declared defaults/validation apply."""
-    tool = getattr(module, tool_name)
-    run = getattr(tool, "run", None)
-    if run is None:  # FASTMCP_DECORATOR_MODE=function
-        return await tool(**arguments)
-    return await run(arguments)
+    tool = await module.mcp.get_tool(tool_name)
+    return await tool.run(arguments)
 
 
 async def _call_fn(module, tool_name: str, ctx=None, **kwargs):
@@ -386,9 +383,9 @@ class TestModuleWithoutCredentials:
     @pytest.mark.parametrize("name", TOOL_NAMES)
     async def test_tools_are_read_only_idempotent_open_world(self, gads, name):
         tool = await gads.mcp.get_tool(name)
-        assert tool.annotations.readOnlyHint is True
-        assert tool.annotations.idempotentHint is True
-        assert tool.annotations.openWorldHint is True
+        assert tool.annotations.read_only_hint is True
+        assert tool.annotations.idempotent_hint is True
+        assert tool.annotations.open_world_hint is True
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("name,params", [

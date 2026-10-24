@@ -18,7 +18,7 @@ from urllib.parse import urlencode
 import aiohttp
 from bs4 import BeautifulSoup
 from fastmcp import FastMCP, Context
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools import ToolResult
 from PIL import Image
 from pydantic import Field
 

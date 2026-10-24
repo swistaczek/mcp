@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from fastmcp import FastMCP, Context
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools import ToolResult
 from pydantic import Field
 
 # Optional OVH verification support

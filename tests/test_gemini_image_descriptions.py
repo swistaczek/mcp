@@ -367,8 +367,8 @@ class TestGenerateImageDescriptionsTool:
         # Mock context
         ctx = AsyncMock()
 
-        # Call the tool (access underlying function via .fn)
-        result = await gemini_alt.generate_image_descriptions.fn(
+        # Call the tool
+        result = await gemini_alt.generate_image_descriptions(
             images=["test.png"],
             type="alt",
             context=None,
@@ -402,7 +402,7 @@ class TestGenerateImageDescriptionsTool:
         ctx = AsyncMock()
 
         # Call the tool with type="description"
-        result = await gemini_alt.generate_image_descriptions.fn(
+        result = await gemini_alt.generate_image_descriptions(
             images=["test.png"],
             type="description",
             context=None,
@@ -437,8 +437,8 @@ class TestGenerateImageDescriptionsTool:
         # Mock context
         ctx = AsyncMock()
 
-        # Call the tool (access underlying function via .fn)
-        result = await gemini_alt.generate_image_descriptions.fn(
+        # Call the tool
+        result = await gemini_alt.generate_image_descriptions(
             images=["1.png", "2.png", "3.png"],
             type="alt",
             context="Test document context",
@@ -476,7 +476,7 @@ class TestGenerateImageDescriptionsTool:
         ctx = AsyncMock()
 
         # Call the tool with file path as context
-        result = await gemini_alt.generate_image_descriptions.fn(
+        result = await gemini_alt.generate_image_descriptions(
             images=["test.png"],
             type="alt",
             context=str(context_file),  # Pass file path instead of content
@@ -502,8 +502,8 @@ class TestGenerateImageDescriptionsTool:
         # Mock context
         ctx = AsyncMock()
 
-        # Call the tool (access underlying function via .fn)
-        result = await gemini_alt.generate_image_descriptions.fn(
+        # Call the tool
+        result = await gemini_alt.generate_image_descriptions(
             images=["bad_image.png"],
             type="alt",
             context=None,
@@ -522,7 +522,7 @@ class TestGenerateImageDescriptionsTool:
         ctx = AsyncMock()
 
         # Call the tool with invalid type
-        result = await gemini_alt.generate_image_descriptions.fn(
+        result = await gemini_alt.generate_image_descriptions(
             images=["test.png"],
             type="invalid",
             context=None,
@@ -731,7 +731,7 @@ class TestGifIntegration:
             pytest.skip("example.gif fixture not found")
 
         # Generate alt text for the GIF
-        result = await gemini_alt.generate_image_descriptions.fn(
+        result = await gemini_alt.generate_image_descriptions(
             images=[str(gif_path)],
             type="alt",
             context=None,
@@ -766,7 +766,7 @@ class TestGifIntegration:
             pytest.skip("example.gif fixture not found")
 
         # Generate detailed description for the GIF
-        result = await gemini_alt.generate_image_descriptions.fn(
+        result = await gemini_alt.generate_image_descriptions(
             images=[str(gif_path)],
             type="description",
             context=None,
@@ -801,8 +801,8 @@ class TestIntegrationWithFixtures:
         # Mock context
         ctx = AsyncMock()
 
-        # Generate description for the fixture image (access underlying function via .fn)
-        result = await gemini_alt.generate_image_descriptions.fn(
+        # Generate description for the fixture image
+        result = await gemini_alt.generate_image_descriptions(
             images=[str(fixtures_path / "1.png")],
             type="alt",
             context=context,

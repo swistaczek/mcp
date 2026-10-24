@@ -15,7 +15,7 @@ from typing import Optional
 from google import genai
 from google.genai import types as genai_types
 from fastmcp import FastMCP, Context
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools import ToolResult
 from PIL import Image
 from pydantic import Field
 

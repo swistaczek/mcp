@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 
 import aiohttp
 from fastmcp import Context, FastMCP
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools import ToolResult
 from pydantic import Field
 
 mcp = FastMCP("Czy Na Czas")

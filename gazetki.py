@@ -30,7 +30,7 @@ from urllib.parse import urlparse
 import aiohttp
 from bs4 import BeautifulSoup
 from fastmcp import Context, FastMCP
-from fastmcp.tools.tool import ToolResult
+from fastmcp.tools import ToolResult
 from PIL import Image
 from pydantic import Field
 
